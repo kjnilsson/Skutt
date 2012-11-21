@@ -6,12 +6,10 @@ using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using RabbitMQ.Client;
-using RabbitMQ.Client.Events;
 using Skutt.Contract;
 using System.Reactive.Subjects;
-using Skutt.RabbitMq;
 
-namespace Skutt
+namespace Skutt.RabbitMq
 {
     public class SkuttBus : IBus, IDisposable
     {
@@ -118,6 +116,15 @@ namespace Skutt
 
         public void Dispose()
         {
+            foreach (var commandSubscriber in commandSubscribers.Values)
+            {
+                commandSubscriber.Stop();
+            }
+
+            foreach (var commandSubscriber in eventSubscribers.Values)
+            {
+                commandSubscriber.Stop();
+            }
             connection.Close();
         }
 
@@ -152,15 +159,15 @@ namespace Skutt
 
         private byte[] SerializeMessage(object message, Uri mt)
         {
-            var lenBytes = BitConverter.GetBytes((short)mt.ToString().Length);
+            var lenBytes = BitConverter.GetBytes((short) mt.ToString().Length);
 
-                var typeBytes = Encoding.UTF8.GetBytes(mt.ToString());
+            var typeBytes = Encoding.UTF8.GetBytes(mt.ToString());
 
-                var payLoad = lenBytes.Concat(typeBytes).ToArray();
+            var payLoad = lenBytes.Concat(typeBytes).ToArray();
 
-                var json = JsonConvert.SerializeObject(message);
+            var json = JsonConvert.SerializeObject(message);
 
-                return payLoad.Concat(Encoding.UTF8.GetBytes(json)).ToArray();
+            return payLoad.Concat(Encoding.UTF8.GetBytes(json)).ToArray();
         }
 
         public IObservable<TEvent> Subscribe<TEvent>(string subscriptionId)
@@ -196,30 +203,14 @@ namespace Skutt
             return exchangeName;
         }
 
-        private void StartEventSubscriber<TEvent>(Subject<TEvent> subject, string queue)
+        private void StartEventSubscriber<TEvent>(IObserver<TEvent> subject, string queue)
         {
             Task.Factory.StartNew(() =>
-                { 
-                    using(var channel = connection.CreateModel())
-                    {
-                        var qs = new QueueSubscriber(queue, connection, messageTypes, o => subject.OnNext((dynamic)o));
-                        eventSubscribers.Add(queue, qs);
-                    }
-                }, TaskCreationOptions.LongRunning);
+                                      {
+                                          var qs = new QueueSubscriber(queue, connection, messageTypes, o => subject.OnNext((dynamic) o));
+                                          eventSubscribers.Add(queue, qs);
+
+                                      }, TaskCreationOptions.LongRunning);
         }
-    }
-
-    
-
-    public class MessageType
-    {
-        public MessageType(Uri type, Type clrType)
-        {
-            ClrType = clrType;
-            Type = type;
-        }
-
-        public Uri Type { get; private set; }
-        public Type ClrType { get; private set; }
     }
 }

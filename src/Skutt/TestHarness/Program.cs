@@ -5,6 +5,7 @@ using System.Text;
 using Skutt;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
+using Skutt.RabbitMq;
 
 namespace TestHarness
 {

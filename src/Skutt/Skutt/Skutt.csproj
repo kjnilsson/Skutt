@@ -63,8 +63,9 @@
     <Compile Include="Contract\Postconditions.cs" />
     <Compile Include="Contract\PreconditionFailedException.cs" />
     <Compile Include="Contract\Preconditions.cs" />
+    <Compile Include="MessageType.cs" />
     <Compile Include="RabbitMq\QueueSubscriber.cs" />
-    <Compile Include="SkuttBus.cs" />
+    <Compile Include="RabbitMq\SkuttBus.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

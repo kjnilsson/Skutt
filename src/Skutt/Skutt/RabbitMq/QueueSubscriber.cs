@@ -14,7 +14,8 @@ namespace Skutt.RabbitMq
         private readonly string queue;
         private readonly IConnection connection;
         private readonly IDictionary<Type, MessageType> messageTypes;
-        private Action<object> queueAdd;
+        private readonly Action<object> queueAdd;
+        private QueueingBasicConsumer consumer;
 
         public QueueSubscriber(string queue, IConnection connection, IDictionary<Type, MessageType> messageTypes, Action<object> queueAdd)
         {
@@ -32,14 +33,19 @@ namespace Skutt.RabbitMq
                 using (var channel = connection.CreateModel())
                 {
                     channel.ConfirmSelect();
-                    var consumer = new QueueingBasicConsumer(channel);
+                    consumer = new QueueingBasicConsumer(channel);
                     
                     channel.QueueDeclare(queue, true, false, false, null);
                     channel.BasicConsume(queue, false, consumer);
                     
                     while (true)
                     {
-                        var ea = (BasicDeliverEventArgs)consumer.Queue.Dequeue();
+                        var ea = consumer.Queue.Dequeue() as BasicDeliverEventArgs;
+                        if(ea == null)
+                        {
+                            break;
+                        }
+
                         byte[] body = ea.Body;
 
                         var typeLen = BitConverter.ToInt16(body, 0);
@@ -50,9 +56,8 @@ namespace Skutt.RabbitMq
                         if (mt != null)
                         {
                             var msg = Encoding.UTF8.GetString(body, typeLen + 2, body.Length - typeLen - 2);
-
                             var messageObject = JsonConvert.DeserializeObject(msg, mt.ClrType);
-
+                            
                             queueAdd(messageObject);
                             channel.BasicAck(ea.DeliveryTag, false);
                         }
@@ -65,6 +70,11 @@ namespace Skutt.RabbitMq
                     }
                 }
             });
+        }
+
+        public void Stop()
+        {
+            consumer.Queue.Enqueue(null);
         }
     }
 }
