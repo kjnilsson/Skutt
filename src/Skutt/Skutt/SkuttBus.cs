@@ -9,13 +9,15 @@ using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Skutt.Contract;
 using System.Reactive.Subjects;
+using Skutt.RabbitMq;
 
 namespace Skutt
 {
     public class SkuttBus : IBus, IDisposable
     {
         private readonly IDictionary<Type, MessageType> messageTypes = new Dictionary<Type, MessageType>();
-        private readonly IDictionary<string, QueueSubscriber> listeners = new Dictionary<string, QueueSubscriber>();
+        private readonly IDictionary<string, QueueSubscriber> commandSubscribers = new Dictionary<string, QueueSubscriber>();
+        private readonly IDictionary<string, QueueSubscriber> eventSubscribers = new Dictionary<string, QueueSubscriber>();
 
         private readonly BlockingCollection<object> commandQueue = new BlockingCollection<object>();
 
@@ -106,9 +108,9 @@ namespace Skutt
             Preconditions.Require(queue, "queue");
             Preconditions.Require(handler, "handler");
 
-            if(listeners.ContainsKey(queue) == false)
+            if(commandSubscribers.ContainsKey(queue) == false)
             {
-                listeners.Add(queue, new QueueSubscriber(queue, connection, messageTypes, o => commandQueue.Add(o)));
+                commandSubscribers.Add(queue, new QueueSubscriber(queue, connection, messageTypes, o => commandQueue.Add(o)));
             }
 
             handlers.Add(typeof(TCommand), o => handler((dynamic)o));
@@ -201,69 +203,13 @@ namespace Skutt
                     using(var channel = connection.CreateModel())
                     {
                         var qs = new QueueSubscriber(queue, connection, messageTypes, o => subject.OnNext((dynamic)o));
+                        eventSubscribers.Add(queue, qs);
                     }
                 }, TaskCreationOptions.LongRunning);
         }
     }
 
-    internal class QueueSubscriber
-    {
-        private readonly string queue;
-        private readonly IConnection connection;
-        private readonly IDictionary<Type, MessageType> messageTypes;
-        private Action<object> queueAdd;
-
-        public QueueSubscriber(string queue, IConnection connection, IDictionary<Type, MessageType> messageTypes, Action<object> queueAdd)
-        {
-            this.queue = queue;
-            this.connection = connection;
-            this.messageTypes = messageTypes;
-            this.queueAdd = queueAdd;
-            StartConsuming();
-        }
-
-        private void StartConsuming()
-        {
-            Task.Factory.StartNew(() =>
-                                      {
-                                          using (var channel = connection.CreateModel())
-                                          {
-                                              channel.ConfirmSelect();
-                                              var consumer = new QueueingBasicConsumer(channel);
-
-                                              channel.QueueDeclare(queue, true, false, false, null);
-                                              channel.BasicConsume(queue, false, consumer);
-
-                                              while (true)
-                                              {
-                                                  var ea = (BasicDeliverEventArgs) consumer.Queue.Dequeue();
-                                                  byte[] body = ea.Body;
-
-                                                  var typeLen = BitConverter.ToInt16(body, 0);
-
-                                                  var typeDesc = Encoding.UTF8.GetString(body, 2, typeLen);
-                                                  var mt = messageTypes.Values.FirstOrDefault(x => x.Type == new Uri(typeDesc));
-
-                                                  if(mt != null)
-                                                  {
-                                                      var msg = Encoding.UTF8.GetString(body, typeLen + 2, body.Length - typeLen - 2);
-
-                                                      var messageObject = JsonConvert.DeserializeObject(msg, mt.ClrType);
-
-                                                      queueAdd(messageObject);
-                                                      channel.BasicAck(ea.DeliveryTag, false);
-                                                  }
-                                                  else
-                                                  {
-                                                      //TODO handle dead letter queue
-                                                      channel.BasicReject(ea.DeliveryTag, false);
-                                                      //channel.BasicNack(ea.DeliveryTag, false, false);
-                                                  }
-                                              }
-                                          }
-                                      });
-        }
-    }
+    
 
     public class MessageType
     {

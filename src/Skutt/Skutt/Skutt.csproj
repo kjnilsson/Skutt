@@ -63,6 +63,7 @@
     <Compile Include="Contract\Postconditions.cs" />
     <Compile Include="Contract\PreconditionFailedException.cs" />
     <Compile Include="Contract\Preconditions.cs" />
+    <Compile Include="RabbitMq\QueueSubscriber.cs" />
     <Compile Include="SkuttBus.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
@@ -75,9 +76,7 @@
   <ItemGroup>
     <None Include="packages.config" />
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="RabbitMq\" />
-  </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
