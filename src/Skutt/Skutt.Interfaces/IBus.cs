@@ -12,5 +12,9 @@ namespace Skutt
         void Send<TCommand>(string destination, TCommand command);
 
         void Receive<TCommand>(string queue, Action<TCommand> handler);
+
+        void Publish<TEvent>(TEvent @event);
+
+        IObservable<TEvent> Subscribe<TEvent>(string subscriptionId);
     }
 }

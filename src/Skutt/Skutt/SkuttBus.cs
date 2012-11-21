@@ -8,6 +8,7 @@ using Newtonsoft.Json;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Skutt.Contract;
+using System.Reactive.Subjects;
 
 namespace Skutt
 {
@@ -25,7 +26,7 @@ namespace Skutt
 
         public SkuttBus(Uri rabbitServer)
         {
-            Preconditions.Require(rabbitServer, "rabbitServer");
+            Preconditions.Require(rabbitServer, "rabbitServer"); 
             this.rabbitServer = rabbitServer;
         }
 
@@ -49,7 +50,14 @@ namespace Skutt
                                           {
                                               if (handlers.ContainsKey(message.GetType()))
                                               {
-                                                  handlers[message.GetType()]((dynamic) message);
+                                                  try
+                                                  {
+                                                      handlers[message.GetType()]((dynamic)message);
+                                                  }
+                                                  catch (Exception e)
+                                                  { 
+                                                    //TODO send to error queue if configured
+                                                  }
                                               }
                                           }
                                       });
@@ -79,21 +87,28 @@ namespace Skutt
 
                 var message = JsonConvert.SerializeObject(command);
 
+                var msgSerialized = payLoad.Concat(Encoding.UTF8.GetBytes(message)).ToArray();
+
                 var bp = channel.CreateBasicProperties();
                 bp.ContentType = "application/skutt";
                 bp.SetPersistent(true);
                 bp.CorrelationId = Guid.NewGuid().ToString();
                 bp.Type = messageType;
 
-                channel.BasicPublish(string.Empty, destination, bp, payLoad.Concat(Encoding.UTF8.GetBytes(message)).ToArray());
+                //this will throw an error if the queue does nto exisit ,i.e. there are no potential handlers
+                channel.QueueDeclarePassive(destination);
+                channel.BasicPublish(string.Empty, destination, bp, msgSerialized);
             }
         }
 
         public void Receive<TCommand>(string queue, Action<TCommand> handler)
         {
+            Preconditions.Require(queue, "queue");
+            Preconditions.Require(handler, "handler");
+
             if(listeners.ContainsKey(queue) == false)
             {
-                listeners.Add(queue, new QueueSubscriber(queue, connection, messageTypes, commandQueue));
+                listeners.Add(queue, new QueueSubscriber(queue, connection, messageTypes, o => commandQueue.Add(o)));
             }
 
             handlers.Add(typeof(TCommand), o => handler((dynamic)o));
@@ -111,6 +126,84 @@ namespace Skutt
                 connection.Close();
             }
         }
+
+        public void Publish<TEvent>(TEvent @event)
+        {
+            if (messageTypes.ContainsKey(typeof(TEvent)) == false)
+            {
+                throw new ArgumentException(string.Format("The type: {0} has not been registered with the bus", typeof(TEvent).Name));
+            }
+
+            //create exchange
+            using (var channel = connection.CreateModel())
+            {
+                var mt = messageTypes[typeof(TEvent)].Type;
+                var exchangeName = GetExchangeName(mt);
+                channel.ExchangeDeclare(exchangeName, "topic");
+                //var routingKey = exchangeName + "." + subscriptionId;
+                var bp = channel.CreateBasicProperties();
+                bp.SetPersistent(true);
+
+                channel.BasicPublish(exchangeName, "#", false, bp, SerializeMessage(@event, mt));
+            }
+        }
+
+        private byte[] SerializeMessage(object message, Uri mt)
+        {
+            var lenBytes = BitConverter.GetBytes((short)mt.ToString().Length);
+
+                var typeBytes = Encoding.UTF8.GetBytes(mt.ToString());
+
+                var payLoad = lenBytes.Concat(typeBytes).ToArray();
+
+                var json = JsonConvert.SerializeObject(message);
+
+                return payLoad.Concat(Encoding.UTF8.GetBytes(json)).ToArray();
+        }
+
+        public IObservable<TEvent> Subscribe<TEvent>(string subscriptionId)
+        {
+            //create and queuea from message namespace
+            //create binding 
+            if (messageTypes.ContainsKey(typeof(TEvent)) == false)
+            {
+                throw new ArgumentException(string.Format("The type: {0} has not been registered with the bus", typeof(TEvent).Name));
+            }
+
+            var mt = messageTypes[typeof(TEvent)].Type;
+
+            var exchangeName = GetExchangeName(mt);
+            var routingKey = exchangeName + "." + subscriptionId;
+            using (var channel = connection.CreateModel())
+            {
+                channel.ExchangeDeclare(exchangeName, "topic");
+                channel.QueueDeclare(routingKey, true, false, false, null);
+                channel.QueueBind(routingKey, exchangeName, "#");
+            }
+
+            var subject = new Subject<TEvent>();
+            
+            StartEventSubscriber(subject, routingKey);
+            
+            return subject;
+        }
+
+        private static string GetExchangeName(Uri mt)
+        {
+            var exchangeName = string.Concat(mt.Authority, mt.LocalPath.Replace('/', '.'));
+            return exchangeName;
+        }
+
+        private void StartEventSubscriber<TEvent>(Subject<TEvent> subject, string queue)
+        {
+            Task.Factory.StartNew(() =>
+                { 
+                    using(var channel = connection.CreateModel())
+                    {
+                        var qs = new QueueSubscriber(queue, connection, messageTypes, o => subject.OnNext((dynamic)o));
+                    }
+                }, TaskCreationOptions.LongRunning);
+        }
     }
 
     internal class QueueSubscriber
@@ -118,14 +211,14 @@ namespace Skutt
         private readonly string queue;
         private readonly IConnection connection;
         private readonly IDictionary<Type, MessageType> messageTypes;
-        private readonly BlockingCollection<object> commandQueue;
+        private Action<object> queueAdd;
 
-        public QueueSubscriber(string queue, IConnection connection, IDictionary<Type, MessageType> messageTypes, BlockingCollection<object> commandQueue)
+        public QueueSubscriber(string queue, IConnection connection, IDictionary<Type, MessageType> messageTypes, Action<object> queueAdd)
         {
             this.queue = queue;
             this.connection = connection;
             this.messageTypes = messageTypes;
-            this.commandQueue = commandQueue;
+            this.queueAdd = queueAdd;
             StartConsuming();
         }
 
@@ -149,9 +242,7 @@ namespace Skutt
                                                   var typeLen = BitConverter.ToInt16(body, 0);
 
                                                   var typeDesc = Encoding.UTF8.GetString(body, 2, typeLen);
-                                                  var mt =
-                                                      messageTypes.Values.FirstOrDefault(
-                                                          x => x.Type == new Uri(typeDesc));
+                                                  var mt = messageTypes.Values.FirstOrDefault(x => x.Type == new Uri(typeDesc));
 
                                                   if(mt != null)
                                                   {
@@ -159,12 +250,14 @@ namespace Skutt
 
                                                       var messageObject = JsonConvert.DeserializeObject(msg, mt.ClrType);
 
-                                                      commandQueue.Add(messageObject);
+                                                      queueAdd(messageObject);
                                                       channel.BasicAck(ea.DeliveryTag, false);
                                                   }
                                                   else
                                                   {
-                                                      channel.BasicNack(ea.DeliveryTag, false, false);
+                                                      //TODO handle dead letter queue
+                                                      channel.BasicReject(ea.DeliveryTag, false);
+                                                      //channel.BasicNack(ea.DeliveryTag, false, false);
                                                   }
                                               }
                                           }
