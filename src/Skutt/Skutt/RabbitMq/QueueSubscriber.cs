@@ -17,7 +17,10 @@ namespace Skutt.RabbitMq
         private readonly Action<object> queueAdd;
         private QueueingBasicConsumer consumer;
 
-        public QueueSubscriber(string queue, IConnection connection, IDictionary<Type, MessageType> messageTypes, Action<object> queueAdd)
+        public QueueSubscriber(string queue,
+            IConnection connection,
+            IDictionary<Type, MessageType> messageTypes,
+            Action<object> queueAdd)
         {
             this.queue = queue;
             this.connection = connection;
@@ -41,7 +44,7 @@ namespace Skutt.RabbitMq
                     while (true)
                     {
                         var ea = consumer.Queue.Dequeue() as BasicDeliverEventArgs;
-                        if(ea == null)
+                        if(ea == null) // poison
                         {
                             break;
                         }
@@ -51,7 +54,7 @@ namespace Skutt.RabbitMq
                         var typeLen = BitConverter.ToInt16(body, 0);
 
                         var typeDesc = Encoding.UTF8.GetString(body, 2, typeLen);
-                        var mt = messageTypes.Values.FirstOrDefault(x => x.Type == new Uri(typeDesc));
+                        var mt = messageTypes.Values.FirstOrDefault(x => x.TypeUri == new Uri(typeDesc));
 
                         if (mt != null)
                         {
@@ -69,7 +72,7 @@ namespace Skutt.RabbitMq
                         }
                     }
                 }
-            });
+            }, TaskCreationOptions.LongRunning);
         }
 
         public void Stop()

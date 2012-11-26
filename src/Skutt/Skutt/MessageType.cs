@@ -7,10 +7,10 @@ namespace Skutt
         public MessageType(Uri type, Type clrType)
         {
             ClrType = clrType;
-            Type = type;
+            TypeUri = type;
         }
 
-        public Uri Type { get; private set; }
+        public Uri TypeUri { get; private set; }
         public Type ClrType { get; private set; }
     }
 }

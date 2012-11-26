@@ -8,17 +8,16 @@ using Newtonsoft.Json;
 using RabbitMQ.Client;
 using Skutt.Contract;
 using System.Reactive.Subjects;
+using System.Threading;
 
 namespace Skutt.RabbitMq
 {
     public class SkuttBus : IBus, IDisposable
     {
-        private readonly IDictionary<Type, MessageType> messageTypes = new Dictionary<Type, MessageType>();
+        private readonly IDictionary<Type, MessageType> typeMap = new Dictionary<Type, MessageType>();
         private readonly IDictionary<string, QueueSubscriber> commandSubscribers = new Dictionary<string, QueueSubscriber>();
         private readonly IDictionary<string, QueueSubscriber> eventSubscribers = new Dictionary<string, QueueSubscriber>();
-
         private readonly BlockingCollection<object> commandQueue = new BlockingCollection<object>();
-
         private readonly IDictionary<Type, Action<object>> handlers = new Dictionary<Type, Action<object>>();
 
         private readonly Uri rabbitServer;
@@ -60,42 +59,34 @@ namespace Skutt.RabbitMq
                                                   }
                                               }
                                           }
-                                      });
+                                      }, TaskCreationOptions.LongRunning);
         }
 
-        public void RegisterMessageType<TMessage>(Uri messageType)
+        public void RegisterMessageType<TMessage>(Uri messageTypeId)
         {
-            this.messageTypes.Add(typeof (TMessage), new MessageType(messageType, typeof (TMessage)));
+            Preconditions.Require(messageTypeId, "messageType");
+
+            this.typeMap.Add(typeof (TMessage), new MessageType(messageTypeId, typeof (TMessage)));
         }
 
         public void Send<TCommand>(string destination, TCommand command)
         {
-            if(messageTypes.ContainsKey(typeof(TCommand)) == false)
-            {
-                throw new ArgumentException(string.Format("The type: {0} has not been registered with the bus", command));
-            }
+            Preconditions.Require(destination, "destination");
+            Preconditions.Require(command, "command");
+
+            MessageType mt = GetMessageType<TCommand>();
 
             using(var channel = connection.CreateModel())
             {
-                var messageType = messageTypes[typeof(TCommand)].Type.ToString();
-
-                var lenBytes = BitConverter.GetBytes((short)messageType.Length);
-
-                var typeBytes = Encoding.UTF8.GetBytes(messageType);
-
-                var payLoad = lenBytes.Concat(typeBytes).ToArray();
-
-                var message = JsonConvert.SerializeObject(command);
-
-                var msgSerialized = payLoad.Concat(Encoding.UTF8.GetBytes(message)).ToArray();
+                var msgSerialized = SerializeMessage(command, mt.TypeUri);
 
                 var bp = channel.CreateBasicProperties();
                 bp.ContentType = "application/skutt";
                 bp.SetPersistent(true);
                 bp.CorrelationId = Guid.NewGuid().ToString();
-                bp.Type = messageType;
+                bp.Type = mt.TypeUri.ToString();
 
-                //this will throw an error if the queue does nto exisit ,i.e. there are no potential handlers
+                //this will throw an error if the queue does nto exisit ,i.e. there are no potential subscribers
                 channel.QueueDeclarePassive(destination);
                 channel.BasicPublish(string.Empty, destination, bp, msgSerialized);
             }
@@ -106,9 +97,9 @@ namespace Skutt.RabbitMq
             Preconditions.Require(queue, "queue");
             Preconditions.Require(handler, "handler");
 
-            if(commandSubscribers.ContainsKey(queue) == false)
+            if (commandSubscribers.ContainsKey(queue) == false)
             {
-                commandSubscribers.Add(queue, new QueueSubscriber(queue, connection, messageTypes, o => commandQueue.Add(o)));
+                commandSubscribers.Add(queue, new QueueSubscriber(queue, connection, typeMap, o => commandQueue.Add(o)));
             }
 
             handlers.Add(typeof(TCommand), o => handler((dynamic)o));
@@ -138,22 +129,19 @@ namespace Skutt.RabbitMq
 
         public void Publish<TEvent>(TEvent @event)
         {
-            if (messageTypes.ContainsKey(typeof(TEvent)) == false)
-            {
-                throw new ArgumentException(string.Format("The type: {0} has not been registered with the bus", typeof(TEvent).Name));
-            }
+            Preconditions.Require(@event, "event");
 
-            //create exchange
+            MessageType mt = GetMessageType<TEvent>();
+
             using (var channel = connection.CreateModel())
             {
-                var mt = messageTypes[typeof(TEvent)].Type;
-                var exchangeName = GetExchangeName(mt);
+                var exchangeName = GetExchangeName(mt.TypeUri);
                 channel.ExchangeDeclare(exchangeName, "topic");
                 //var routingKey = exchangeName + "." + subscriptionId;
                 var bp = channel.CreateBasicProperties();
                 bp.SetPersistent(true);
 
-                channel.BasicPublish(exchangeName, "#", false, bp, SerializeMessage(@event, mt));
+                channel.BasicPublish(exchangeName, "#", false, bp, SerializeMessage(@event, mt.TypeUri));
             }
         }
 
@@ -170,24 +158,21 @@ namespace Skutt.RabbitMq
             return payLoad.Concat(Encoding.UTF8.GetBytes(json)).ToArray();
         }
 
-        public IObservable<TEvent> Subscribe<TEvent>(string subscriptionId)
+        public IObservable<TEvent> Observe<TEvent>(string subscriptionId, string topic = "#")
         {
+            Preconditions.Require(subscriptionId, "subscriptionId");
             //create and queuea from message namespace
             //create binding 
-            if (messageTypes.ContainsKey(typeof(TEvent)) == false)
-            {
-                throw new ArgumentException(string.Format("The type: {0} has not been registered with the bus", typeof(TEvent).Name));
-            }
+            MessageType mt = GetMessageType<TEvent>();
 
-            var mt = messageTypes[typeof(TEvent)].Type;
-
-            var exchangeName = GetExchangeName(mt);
+            var exchangeName = GetExchangeName(mt.TypeUri);
             var routingKey = exchangeName + "." + subscriptionId;
+
             using (var channel = connection.CreateModel())
             {
                 channel.ExchangeDeclare(exchangeName, "topic");
                 channel.QueueDeclare(routingKey, true, false, false, null);
-                channel.QueueBind(routingKey, exchangeName, "#");
+                channel.QueueBind(routingKey, exchangeName, topic);
             }
 
             var subject = new Subject<TEvent>();
@@ -197,18 +182,30 @@ namespace Skutt.RabbitMq
             return subject;
         }
 
+        private MessageType GetMessageType<TMessage>()
+        {
+            MessageType mt;
+            if (typeMap.TryGetValue(typeof(TMessage), out mt) == false)
+            {
+                throw new ArgumentException(string.Format("The type: {0} has not been registered with the bus", typeof(TMessage).Name));
+            }
+
+            return mt;
+        }
+
         private static string GetExchangeName(Uri mt)
         {
             var exchangeName = string.Concat(mt.Authority, mt.LocalPath.Replace('/', '.'));
-            return exchangeName;
+            return exchangeName.ToLower();
         }
 
         private void StartEventSubscriber<TEvent>(IObserver<TEvent> subject, string queue)
         {
             Task.Factory.StartNew(() =>
                                       {
-                                          var qs = new QueueSubscriber(queue, connection, messageTypes, o => subject.OnNext((dynamic) o));
+                                          var qs = new QueueSubscriber(queue, connection, typeMap, o => subject.OnNext((dynamic) o));
                                           eventSubscribers.Add(queue, qs);
+                                          //Console.WriteLine("event subscriber thread: " + Thread.CurrentThread.ManagedThreadId);
 
                                       }, TaskCreationOptions.LongRunning);
         }

@@ -6,6 +6,7 @@ using Skutt;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using Skutt.RabbitMq;
+using System.Threading;
 
 namespace TestHarness
 {
@@ -18,13 +19,21 @@ namespace TestHarness
             bus.RegisterMessageType<TestOne>(new Uri("http://msg.skutt.net/messages/test_one"));
             bus.RegisterMessageType<DeadLetter>(new Uri("http://msg.skutt.net/messages/dead_letter"));
 
-            bus.Receive<TestOne>("skutt_object", m => Console.WriteLine(m.CorrelationId) );
+            bus.Receive<TestOne>("skutt_object", m => Console.WriteLine(m.CorrelationId + " " + Thread.CurrentThread.ManagedThreadId.ToString()));
 
             SendCommands(bus);
             
-            var s = bus.Subscribe<TestOne>("my_test");
-            var _ = s.Where(m => m.Greeting.Equals("hello"))
-                     .Subscribe(m => Console.WriteLine(m.Greeting));
+            Console.WriteLine("App thread: " + Thread.CurrentThread.ManagedThreadId.ToString());
+
+            var obs = bus.Observe<TestOne>("my_test");
+
+            var __ = obs.Subscribe(m => Console.WriteLine(m.Greeting + Thread.CurrentThread.ManagedThreadId.ToString()));
+
+            var _ = obs.Where(m => m.Greeting.Equals("hello"))
+                     .Subscribe(m =>
+                         {
+                             Console.WriteLine(m.Greeting + Thread.CurrentThread.ManagedThreadId.ToString());
+                         });
 
             bus.Publish<TestOne>(new TestOne() { CorrelationId = Guid.NewGuid(), Greeting = "hello" });
             bus.Publish<TestOne>(new TestOne() { CorrelationId = Guid.NewGuid(), Greeting = "bye" });
@@ -35,12 +44,8 @@ namespace TestHarness
 
         public static void SendCommands(IBus bus)
         {
-
-            
-            
             bus.Send<DeadLetter>("skutt_object", new DeadLetter { });
             bus.Send<TestOne>("skutt_object", new TestOne { CorrelationId = Guid.NewGuid() });
-            //bus.Dispose();
         }
     }
 

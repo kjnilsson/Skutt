@@ -15,6 +15,6 @@ namespace Skutt
 
         void Publish<TEvent>(TEvent @event);
 
-        IObservable<TEvent> Subscribe<TEvent>(string subscriptionId);
+        IObservable<TEvent> Observe<TEvent>(string subscriptionId, string topic = "#");
     }
 }
