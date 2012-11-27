@@ -17,6 +17,7 @@ namespace TestHarness
             var bus = new SkuttBus(new Uri(@"amqp://guest:guest@localhost:5672"));
             bus.Connect();
             bus.RegisterMessageType<TestOne>(new Uri("http://msg.skutt.net/messages/test_one"));
+            bus.RegisterMessageType<TestTwo>(new Uri("http://msg.skutt.net/messages/test_two"));
             bus.RegisterMessageType<DeadLetter>(new Uri("http://msg.skutt.net/messages/dead_letter"));
 
             bus.Receive<TestOne>("skutt_object", m => Console.WriteLine(m.CorrelationId + " " + Thread.CurrentThread.ManagedThreadId.ToString()));
@@ -26,6 +27,7 @@ namespace TestHarness
             Console.WriteLine("App thread: " + Thread.CurrentThread.ManagedThreadId.ToString());
 
             var obs = bus.Observe<TestOne>("my_test");
+            var obs2 = bus.Observe<TestTwo>("my_test").Subscribe(e => Console.WriteLine("two" + Thread.CurrentThread.ManagedThreadId.ToString()));
 
             var __ = obs.Subscribe(m => Console.WriteLine(m.Greeting + Thread.CurrentThread.ManagedThreadId.ToString()));
 
@@ -33,6 +35,13 @@ namespace TestHarness
                      .Subscribe(m =>
                          {
                              Console.WriteLine(m.Greeting + Thread.CurrentThread.ManagedThreadId.ToString());
+                             bus.Publish(new TestTwo());
+                             bus.Publish(new TestTwo());
+                             bus.Publish(new TestTwo());
+                             bus.Publish(new TestTwo());
+                             bus.Publish(new TestTwo());
+                             bus.Publish(new TestTwo());
+                             bus.Publish(new TestTwo());
                          });
 
             bus.Publish<TestOne>(new TestOne() { CorrelationId = Guid.NewGuid(), Greeting = "hello" });
@@ -48,6 +57,9 @@ namespace TestHarness
             bus.Send<TestOne>("skutt_object", new TestOne { CorrelationId = Guid.NewGuid() });
         }
     }
+
+    public class TestTwo
+    { }
 
     public class TestOne
     {

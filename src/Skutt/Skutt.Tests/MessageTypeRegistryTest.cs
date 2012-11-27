@@ -7,21 +7,48 @@ using Xunit;
 
 namespace Skutt.Tests
 {
-    class MessageTypeRegistryTest
+    public class MessageTypeRegistryTest
     {
         class TestMessage
+        { }
+        
+        class TestMessage2
         { }
 
         [Fact]
         public void AddedMappingShouldBeRetrievableAsFromType()
         {
+            //Arrange
+            var sut = new MessageTypeRegistry();
+            var uri = new Uri("http://messages.skutt.net/tests");
+            
+            //Act
+            sut.Add<TestMessage>(uri);
+
+            //Assert
+            Assert.Equal(uri, sut.GetUri<TestMessage>());
+            Assert.Equal(typeof(TestMessage), sut.GetType(uri));
+            Assert.Equal(typeof(TestMessage), sut.GetType("http://messages.skutt.net/tests"));
+        }
+
+        [Fact]
+        public void AddShouldThrowIfUriHasBeenRegisteredToAnotherType()
+        {
             var sut = new MessageTypeRegistry();
             var uri = new Uri("http://messages.skutt.net/tests");
             sut.Add<TestMessage>(uri);
 
-            Assert.Equal(uri, sut.GetUri<TestMessage>());
-            Assert.Equal(typeof(TestMessage), sut.GetType(uri));
-            Assert.Equal(typeof(TestMessage), sut.GetType("http://messages.skutt.net/tests"));
+            Assert.Throws<SkuttException>(() => sut.Add<TestMessage2>(uri));
+        }
+
+        [Fact]
+        public void AddShouldThrowIfTypeHasBeenRegisteredAgainstAnotherUri()
+        {
+            var sut = new MessageTypeRegistry();
+            var uri = new Uri("http://messages.skutt.net/test_message");
+            sut.Add<TestMessage>(uri);
+
+            Assert.Throws<SkuttException>(() => sut.Add<TestMessage>(new Uri("http://messages.skutt.net/test_message2")));
         }
 
         [Fact]

@@ -15,10 +15,9 @@ namespace Skutt.RabbitMq
 {
     public class SkuttBus : IBus, IDisposable
     {
-        //private readonly IDictionary<Type, MessageType> typeMap = new Dictionary<Type, MessageType>();
         private readonly IDictionary<string, QueueSubscriber> queueSubscribers = new Dictionary<string, QueueSubscriber>();
         private readonly BlockingCollection<object> commandQueue = new BlockingCollection<object>();
-        private readonly IDictionary<Type, Action<object>> handlers = new Dictionary<Type, Action<object>>();
+        private readonly IDictionary<Type, Action<object>> commandHandlers = new Dictionary<Type, Action<object>>();
         private readonly MessageTypeRegistry registry = new MessageTypeRegistry();
 
         private readonly Uri rabbitServer;
@@ -27,6 +26,7 @@ namespace Skutt.RabbitMq
         public SkuttBus(Uri rabbitServer)
         {
             Preconditions.Require(rabbitServer, "rabbitServer"); 
+
             this.rabbitServer = rabbitServer;
         }
 
@@ -46,22 +46,19 @@ namespace Skutt.RabbitMq
             StartCommandProcessor();
         }
 
-        void connection_ConnectionShutdown(IConnection connection, ShutdownEventArgs reason)
-        {
-            throw new NotImplementedException();
-        }
-
         private void StartCommandProcessor()
         {
             Task.Factory.StartNew(() =>
                                       {
                                           foreach (var message in commandQueue.GetConsumingEnumerable())
                                           {
-                                              if (handlers.ContainsKey(message.GetType()))
+                                              Action<object> handler;
+
+                                              if (commandHandlers.TryGetValue(message.GetType(), out handler))
                                               {
                                                   try
                                                   {
-                                                      handlers[message.GetType()]((dynamic)message);
+                                                      handler(message);
                                                   }
                                                   catch (Exception e)
                                                   { 
@@ -85,6 +82,7 @@ namespace Skutt.RabbitMq
             Preconditions.Require(command, "command");
 
             var messageTypeUri = registry.GetUri<TCommand>();
+        
             try
             {
                 using (var channel = connection.CreateModel())
@@ -100,8 +98,7 @@ namespace Skutt.RabbitMq
             catch (OperationInterruptedException oie)
             {
                 throw new SkuttException(
-                    string.Format("Queue: {0} does not exist so you can't send a command to it", destination),
-                    oie);
+                    string.Format("Queue: {0} does not exist so you can't send a command to it", destination), oie);
             }
             catch (Exception e)
             {
@@ -127,10 +124,10 @@ namespace Skutt.RabbitMq
 
             if (queueSubscribers.ContainsKey(queue) == false)
             {
-                queueSubscribers.Add(queue, new QueueSubscriber(queue, connection, registry, o => commandQueue.Add(o)));
+                queueSubscribers.Add(queue, new QueueSubscriber(queue, connection, registry, o => commandQueue.Add(o), true));
             }
 
-            handlers.Add(typeof(TCommand), o => handler((dynamic)o));
+            commandHandlers.Add(typeof(TCommand), o => handler((dynamic)o));
         }
 
         public void Dispose()
@@ -212,7 +209,7 @@ namespace Skutt.RabbitMq
 
         private void AddNewEventSubscriber<TEvent>(IObserver<TEvent> subject, string queue)
         {
-            queueSubscribers.Add(queue, new QueueSubscriber(queue, connection, registry, o => subject.OnNext((dynamic)o)));
+            queueSubscribers.Add(queue, new QueueSubscriber(queue, connection, registry, o => subject.OnNext((dynamic)o), true));
         }
     }
 }

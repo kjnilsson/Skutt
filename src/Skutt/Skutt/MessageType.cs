@@ -19,14 +19,28 @@ namespace Skutt
 
     public class MessageTypeRegistry
     {
-        IDictionary<Type, Uri> typesToUris = new Dictionary<Type, Uri>();
-        IDictionary<Uri, Type> urisToTypes = new Dictionary<Uri, Type>();
+        private IDictionary<Type, Uri> typesToUris = new Dictionary<Type, Uri>();
+        private IDictionary<Uri, Type> urisToTypes = new Dictionary<Uri, Type>();
 
         public void Add<TMessage>(Uri uri)
         {
             Preconditions.Require(uri, "uri");
 
-            if (typesToUris.ContainsKey(typeof(TMessage)) == false)
+            var type = typeof(TMessage);
+
+            if (urisToTypes.ContainsKey(uri) && typesToUris.ContainsKey(type) == false)
+            {
+                throw new SkuttException(
+                    string.Format("Message type uri: {0} has already been registered against type: {1}", uri, urisToTypes[uri].Name));
+            }
+
+            if (typesToUris.ContainsKey(type) && urisToTypes.ContainsKey(uri) == false)
+            {
+                throw new SkuttException(
+                    string.Format("Message type: {1} has already been registered against uri: {0}", uri, type));
+            }
+
+            if (typesToUris.ContainsKey(type) == false)
             {
                 typesToUris.Add(typeof(TMessage), uri);
             }
