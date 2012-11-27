@@ -5,22 +5,10 @@ using System.Collections.Generic;
 
 namespace Skutt
 {
-    public class MessageType
-    {
-        public MessageType(Uri type, Type clrType)
-        {
-            ClrType = clrType;
-            TypeUri = type;
-        }
-
-        public Uri TypeUri { get; private set; }
-        public Type ClrType { get; private set; }
-    }
-
     public class MessageTypeRegistry
     {
-        private IDictionary<Type, Uri> typesToUris = new Dictionary<Type, Uri>();
-        private IDictionary<Uri, Type> urisToTypes = new Dictionary<Uri, Type>();
+        private readonly IDictionary<Type, Uri> typesToUris = new Dictionary<Type, Uri>();
+        private readonly IDictionary<Uri, Type> urisToTypes = new Dictionary<Uri, Type>();
 
         public void Add<TMessage>(Uri uri)
         {

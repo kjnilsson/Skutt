@@ -63,8 +63,10 @@
     <Compile Include="Contract\Postconditions.cs" />
     <Compile Include="Contract\PreconditionFailedException.cs" />
     <Compile Include="Contract\Preconditions.cs" />
-    <Compile Include="MessageType.cs" />
+    <Compile Include="MessageSerializer.cs" />
+    <Compile Include="MessageTypeRegistry.cs" />
     <Compile Include="RabbitMq\QueueSubscriber.cs" />
+    <Compile Include="RabbitMq\RabbitMqChannelFactory.cs" />
     <Compile Include="RabbitMq\SkuttBus.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RabbitMq\SkuttException.cs" />

@@ -1,10 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
 using RabbitMQ.Client;
 using Skutt.Contract;
 using System.Reactive.Subjects;
@@ -20,6 +17,8 @@ namespace Skutt.RabbitMq
         private readonly IDictionary<Type, Action<object>> commandHandlers = new Dictionary<Type, Action<object>>();
         private readonly MessageTypeRegistry registry = new MessageTypeRegistry();
 
+        private IRabbitMqChannelFactory channelFactory;
+
         private readonly Uri rabbitServer;
         private IConnection connection;
 
@@ -28,6 +27,25 @@ namespace Skutt.RabbitMq
             Preconditions.Require(rabbitServer, "rabbitServer"); 
 
             this.rabbitServer = rabbitServer;
+            
+        }
+
+        private IRabbitMqChannelFactory ChannelFactory
+        {
+            get
+            {
+                if(connection == null || connection.IsOpen == false)
+                {
+                    throw new SkuttException("Cant use the channle factory unless the connection is open");
+                }
+
+                if(channelFactory == null)
+                {
+                    this.channelFactory = new RabbitMqChannelFactory(connection);
+                }
+
+                return channelFactory;
+            }
         }
 
         public void Connect()
@@ -42,6 +60,8 @@ namespace Skutt.RabbitMq
             { 
                 Console.WriteLine("Connection interrupted"); 
             };
+
+            this.channelFactory = new RabbitMqChannelFactory(connection);
 
             StartCommandProcessor();
         }
@@ -85,14 +105,9 @@ namespace Skutt.RabbitMq
         
             try
             {
-                using (var channel = connection.CreateModel())
+                using(var channel = ChannelFactory.PointToPointSend(destination))
                 {
-                    var msgSerialized = SerializeMessage(command, messageTypeUri);
-                    var bp = GetBasicProperties(messageTypeUri.ToString(), channel);
-
-                    //this will throw an error if the queue does nto exist, i.e. there are no potential subscribers
-                    channel.QueueDeclarePassive(destination);
-                    channel.BasicPublish(string.Empty, destination, bp, msgSerialized);
+                    channel.Put(MessageSerializer.SerializeDefault(command, messageTypeUri), messageTypeUri.ToString());
                 }
             }
             catch (OperationInterruptedException oie)
@@ -104,17 +119,6 @@ namespace Skutt.RabbitMq
             {
                 throw;
             }
-        }
-
-        private static IBasicProperties GetBasicProperties(string messageUri, IModel channel)
-        {
-            var bp = channel.CreateBasicProperties();
-            bp.ContentType = "application/skutt";
-            bp.SetPersistent(true);
-            bp.CorrelationId = Guid.NewGuid().ToString();
-            bp.Type = messageUri;
-
-            return bp;
         }
 
         public void Receive<TCommand>(string queue, Action<TCommand> handler)
@@ -135,9 +139,15 @@ namespace Skutt.RabbitMq
             foreach (var commandSubscriber in queueSubscribers.Values)
             {
                 commandSubscriber.Stop();
+                commandSubscriber.Dispose();
             }
 
-            connection.Close();
+            if (connection != null && connection.IsOpen)
+            {
+                connection.Close();
+            }
+
+            GC.SuppressFinalize(this);
         }
 
         ~SkuttBus()
@@ -155,26 +165,10 @@ namespace Skutt.RabbitMq
 
             var messageTypeUri = registry.GetUri<TEvent>();
 
-            using (var channel = connection.CreateModel())
+            using(var channel = ChannelFactory.PublishTopic(topic))
             {
-                var exchangeName = GetExchangeName(messageTypeUri);
-                channel.ExchangeDeclare(exchangeName, "topic");
-                var bp = GetBasicProperties(messageTypeUri.ToString(), channel);
-                
-                channel.BasicPublish(exchangeName, topic, false, bp, SerializeMessage(@event, messageTypeUri));
+                channel.Put(MessageSerializer.SerializeDefault(@event, messageTypeUri), messageTypeUri.ToString());
             }
-        }
-
-        private byte[] SerializeMessage(object message, Uri messageType)
-        {
-            // this is fairly horrid code
-            var type = messageType.ToString();
-            var lenBytes = BitConverter.GetBytes((short) type.Length);
-            var typeBytes = Encoding.UTF8.GetBytes(type.ToString());
-            var payLoad = lenBytes.Concat(typeBytes).ToArray();
-            var json = JsonConvert.SerializeObject(message);
-
-            return payLoad.Concat(Encoding.UTF8.GetBytes(json)).ToArray();
         }
 
         public IObservable<TEvent> Observe<TEvent>(string subscriptionId, string topic = "#")
