@@ -9,16 +9,17 @@ using RabbitMQ.Client;
 using Skutt.Contract;
 using System.Reactive.Subjects;
 using System.Threading;
+using RabbitMQ.Client.Exceptions;
 
 namespace Skutt.RabbitMq
 {
     public class SkuttBus : IBus, IDisposable
     {
-        private readonly IDictionary<Type, MessageType> typeMap = new Dictionary<Type, MessageType>();
-        private readonly IDictionary<string, QueueSubscriber> commandSubscribers = new Dictionary<string, QueueSubscriber>();
-        private readonly IDictionary<string, QueueSubscriber> eventSubscribers = new Dictionary<string, QueueSubscriber>();
+        //private readonly IDictionary<Type, MessageType> typeMap = new Dictionary<Type, MessageType>();
+        private readonly IDictionary<string, QueueSubscriber> queueSubscribers = new Dictionary<string, QueueSubscriber>();
         private readonly BlockingCollection<object> commandQueue = new BlockingCollection<object>();
         private readonly IDictionary<Type, Action<object>> handlers = new Dictionary<Type, Action<object>>();
+        private readonly MessageTypeRegistry registry = new MessageTypeRegistry();
 
         private readonly Uri rabbitServer;
         private IConnection connection;
@@ -37,8 +38,17 @@ namespace Skutt.RabbitMq
                          };
 
             this.connection = cf.CreateConnection();
+            this.connection.ConnectionShutdown += (c, ea) => 
+            { 
+                Console.WriteLine("Connection interrupted"); 
+            };
 
             StartCommandProcessor();
+        }
+
+        void connection_ConnectionShutdown(IConnection connection, ShutdownEventArgs reason)
+        {
+            throw new NotImplementedException();
         }
 
         private void StartCommandProcessor()
@@ -62,11 +72,11 @@ namespace Skutt.RabbitMq
                                       }, TaskCreationOptions.LongRunning);
         }
 
-        public void RegisterMessageType<TMessage>(Uri messageTypeId)
+        public void RegisterMessageType<TMessage>(Uri messageTypeUri)
         {
-            Preconditions.Require(messageTypeId, "messageType");
+            Preconditions.Require(messageTypeUri, "messageTypeUri");
 
-            this.typeMap.Add(typeof (TMessage), new MessageType(messageTypeId, typeof (TMessage)));
+            this.registry.Add<TMessage>(messageTypeUri);
         }
 
         public void Send<TCommand>(string destination, TCommand command)
@@ -74,22 +84,40 @@ namespace Skutt.RabbitMq
             Preconditions.Require(destination, "destination");
             Preconditions.Require(command, "command");
 
-            MessageType mt = GetMessageType<TCommand>();
-
-            using(var channel = connection.CreateModel())
+            var messageTypeUri = registry.GetUri<TCommand>();
+            try
             {
-                var msgSerialized = SerializeMessage(command, mt.TypeUri);
+                using (var channel = connection.CreateModel())
+                {
+                    var msgSerialized = SerializeMessage(command, messageTypeUri);
+                    var bp = GetBasicProperties(messageTypeUri.ToString(), channel);
 
-                var bp = channel.CreateBasicProperties();
-                bp.ContentType = "application/skutt";
-                bp.SetPersistent(true);
-                bp.CorrelationId = Guid.NewGuid().ToString();
-                bp.Type = mt.TypeUri.ToString();
-
-                //this will throw an error if the queue does nto exisit ,i.e. there are no potential subscribers
-                channel.QueueDeclarePassive(destination);
-                channel.BasicPublish(string.Empty, destination, bp, msgSerialized);
+                    //this will throw an error if the queue does nto exist, i.e. there are no potential subscribers
+                    channel.QueueDeclarePassive(destination);
+                    channel.BasicPublish(string.Empty, destination, bp, msgSerialized);
+                }
             }
+            catch (OperationInterruptedException oie)
+            {
+                throw new SkuttException(
+                    string.Format("Queue: {0} does not exist so you can't send a command to it", destination),
+                    oie);
+            }
+            catch (Exception e)
+            {
+                throw;
+            }
+        }
+
+        private static IBasicProperties GetBasicProperties(string messageUri, IModel channel)
+        {
+            var bp = channel.CreateBasicProperties();
+            bp.ContentType = "application/skutt";
+            bp.SetPersistent(true);
+            bp.CorrelationId = Guid.NewGuid().ToString();
+            bp.Type = messageUri;
+
+            return bp;
         }
 
         public void Receive<TCommand>(string queue, Action<TCommand> handler)
@@ -97,9 +125,9 @@ namespace Skutt.RabbitMq
             Preconditions.Require(queue, "queue");
             Preconditions.Require(handler, "handler");
 
-            if (commandSubscribers.ContainsKey(queue) == false)
+            if (queueSubscribers.ContainsKey(queue) == false)
             {
-                commandSubscribers.Add(queue, new QueueSubscriber(queue, connection, typeMap, o => commandQueue.Add(o)));
+                queueSubscribers.Add(queue, new QueueSubscriber(queue, connection, registry, o => commandQueue.Add(o)));
             }
 
             handlers.Add(typeof(TCommand), o => handler((dynamic)o));
@@ -107,15 +135,11 @@ namespace Skutt.RabbitMq
 
         public void Dispose()
         {
-            foreach (var commandSubscriber in commandSubscribers.Values)
+            foreach (var commandSubscriber in queueSubscribers.Values)
             {
                 commandSubscriber.Stop();
             }
 
-            foreach (var commandSubscriber in eventSubscribers.Values)
-            {
-                commandSubscriber.Stop();
-            }
             connection.Close();
         }
 
@@ -127,32 +151,30 @@ namespace Skutt.RabbitMq
             }
         }
 
-        public void Publish<TEvent>(TEvent @event)
+        public void Publish<TEvent>(TEvent @event, string topic = "#")
         {
             Preconditions.Require(@event, "event");
+            Preconditions.Require(topic, "topic");
 
-            MessageType mt = GetMessageType<TEvent>();
+            var messageTypeUri = registry.GetUri<TEvent>();
 
             using (var channel = connection.CreateModel())
             {
-                var exchangeName = GetExchangeName(mt.TypeUri);
+                var exchangeName = GetExchangeName(messageTypeUri);
                 channel.ExchangeDeclare(exchangeName, "topic");
-                //var routingKey = exchangeName + "." + subscriptionId;
-                var bp = channel.CreateBasicProperties();
-                bp.SetPersistent(true);
-
-                channel.BasicPublish(exchangeName, "#", false, bp, SerializeMessage(@event, mt.TypeUri));
+                var bp = GetBasicProperties(messageTypeUri.ToString(), channel);
+                
+                channel.BasicPublish(exchangeName, topic, false, bp, SerializeMessage(@event, messageTypeUri));
             }
         }
 
-        private byte[] SerializeMessage(object message, Uri mt)
+        private byte[] SerializeMessage(object message, Uri messageType)
         {
-            var lenBytes = BitConverter.GetBytes((short) mt.ToString().Length);
-
-            var typeBytes = Encoding.UTF8.GetBytes(mt.ToString());
-
+            // this is fairly horrid code
+            var type = messageType.ToString();
+            var lenBytes = BitConverter.GetBytes((short) type.Length);
+            var typeBytes = Encoding.UTF8.GetBytes(type.ToString());
             var payLoad = lenBytes.Concat(typeBytes).ToArray();
-
             var json = JsonConvert.SerializeObject(message);
 
             return payLoad.Concat(Encoding.UTF8.GetBytes(json)).ToArray();
@@ -161,11 +183,11 @@ namespace Skutt.RabbitMq
         public IObservable<TEvent> Observe<TEvent>(string subscriptionId, string topic = "#")
         {
             Preconditions.Require(subscriptionId, "subscriptionId");
-            //create and queuea from message namespace
-            //create binding 
-            MessageType mt = GetMessageType<TEvent>();
+            Preconditions.Require(topic, "topic");
 
-            var exchangeName = GetExchangeName(mt.TypeUri);
+            var messageTypeUri = registry.GetUri<TEvent>();
+
+            var exchangeName = GetExchangeName(messageTypeUri);
             var routingKey = exchangeName + "." + subscriptionId;
 
             using (var channel = connection.CreateModel())
@@ -177,20 +199,9 @@ namespace Skutt.RabbitMq
 
             var subject = new Subject<TEvent>();
             
-            StartEventSubscriber(subject, routingKey);
+            AddNewEventSubscriber(subject, routingKey);
             
             return subject;
-        }
-
-        private MessageType GetMessageType<TMessage>()
-        {
-            MessageType mt;
-            if (typeMap.TryGetValue(typeof(TMessage), out mt) == false)
-            {
-                throw new ArgumentException(string.Format("The type: {0} has not been registered with the bus", typeof(TMessage).Name));
-            }
-
-            return mt;
         }
 
         private static string GetExchangeName(Uri mt)
@@ -199,15 +210,9 @@ namespace Skutt.RabbitMq
             return exchangeName.ToLower();
         }
 
-        private void StartEventSubscriber<TEvent>(IObserver<TEvent> subject, string queue)
+        private void AddNewEventSubscriber<TEvent>(IObserver<TEvent> subject, string queue)
         {
-            Task.Factory.StartNew(() =>
-                                      {
-                                          var qs = new QueueSubscriber(queue, connection, typeMap, o => subject.OnNext((dynamic) o));
-                                          eventSubscribers.Add(queue, qs);
-                                          //Console.WriteLine("event subscriber thread: " + Thread.CurrentThread.ManagedThreadId);
-
-                                      }, TaskCreationOptions.LongRunning);
+            queueSubscribers.Add(queue, new QueueSubscriber(queue, connection, registry, o => subject.OnNext((dynamic)o)));
         }
     }
 }

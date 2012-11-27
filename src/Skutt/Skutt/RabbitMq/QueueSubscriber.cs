@@ -1,6 +1,7 @@
 ﻿using Newtonsoft.Json;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using Skutt.Contract;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,19 +14,25 @@ namespace Skutt.RabbitMq
     {
         private readonly string queue;
         private readonly IConnection connection;
-        private readonly IDictionary<Type, MessageType> messageTypes;
+        private readonly MessageTypeRegistry registry;
         private readonly Action<object> queueAdd;
         private QueueingBasicConsumer consumer;
 
         public QueueSubscriber(string queue,
             IConnection connection,
-            IDictionary<Type, MessageType> messageTypes,
-            Action<object> queueAdd)
+            MessageTypeRegistry registry,
+            Action<object> handle)
         {
+            Preconditions.Require(queue, "queue");
+            Preconditions.Require(connection, "connection");
+            Preconditions.Require(registry, "registry");
+            Preconditions.Require(handle, "handle");
+
             this.queue = queue;
             this.connection = connection;
-            this.messageTypes = messageTypes;
-            this.queueAdd = queueAdd;
+            this.registry = registry;
+            this.queueAdd = handle;
+
             StartConsuming();
         }
 
@@ -43,32 +50,33 @@ namespace Skutt.RabbitMq
                     
                     while (true)
                     {
-                        var ea = consumer.Queue.Dequeue() as BasicDeliverEventArgs;
-                        if(ea == null) // poison
+                        var deliveryEventArgs = consumer.Queue.Dequeue() as BasicDeliverEventArgs;
+
+                        if(deliveryEventArgs == null) // poison
                         {
                             break;
                         }
 
-                        byte[] body = ea.Body;
+                        byte[] body = deliveryEventArgs.Body;
 
                         var typeLen = BitConverter.ToInt16(body, 0);
 
                         var typeDesc = Encoding.UTF8.GetString(body, 2, typeLen);
-                        var mt = messageTypes.Values.FirstOrDefault(x => x.TypeUri == new Uri(typeDesc));
-
-                        if (mt != null)
+                        
+                        var messageType = registry.GetType(deliveryEventArgs.BasicProperties.Type);
+                        
+                        if (messageType != null)
                         {
-                            var msg = Encoding.UTF8.GetString(body, typeLen + 2, body.Length - typeLen - 2);
-                            var messageObject = JsonConvert.DeserializeObject(msg, mt.ClrType);
+                            var serializedMessage = Encoding.UTF8.GetString(body, typeLen + 2, body.Length - typeLen - 2);
+                            var messageObject = JsonConvert.DeserializeObject(serializedMessage, messageType);
                             
                             queueAdd(messageObject);
-                            channel.BasicAck(ea.DeliveryTag, false);
+                            channel.BasicAck(deliveryEventArgs.DeliveryTag, false);
                         }
                         else
                         {
                             //TODO handle dead letter queue
-                            channel.BasicReject(ea.DeliveryTag, false);
-                            //channel.BasicNack(ea.DeliveryTag, false, false);
+                            channel.BasicReject(deliveryEventArgs.DeliveryTag, false);
                         }
                     }
                 }

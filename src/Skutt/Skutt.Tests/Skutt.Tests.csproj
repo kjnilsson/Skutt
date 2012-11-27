@@ -43,11 +43,18 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="MessageTypeRegistryTest.cs" />
     <Compile Include="SkuttBusTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Skutt\Skutt.csproj">
+      <Project>{7e52ee90-b291-421b-905f-f4c1169fe528}</Project>
+      <Name>Skutt</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

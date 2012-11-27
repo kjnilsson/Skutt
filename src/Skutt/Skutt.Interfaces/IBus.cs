@@ -13,7 +13,7 @@ namespace Skutt
 
         void Receive<TCommand>(string queue, Action<TCommand> handler);
 
-        void Publish<TEvent>(TEvent @event);
+        void Publish<TEvent>(TEvent @event, string topic = "#");
 
         IObservable<TEvent> Observe<TEvent>(string subscriptionId, string topic = "#");
     }

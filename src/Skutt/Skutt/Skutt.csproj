@@ -67,6 +67,7 @@
     <Compile Include="RabbitMq\QueueSubscriber.cs" />
     <Compile Include="RabbitMq\SkuttBus.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="RabbitMq\SkuttException.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Skutt.Interfaces\Skutt.Interfaces.csproj">
