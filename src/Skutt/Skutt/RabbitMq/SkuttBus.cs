@@ -13,7 +13,7 @@ namespace Skutt.RabbitMq
     public class SkuttBus : IBus, IDisposable
     {
         private readonly IDictionary<string, QueueSubscriber> queueSubscribers = new Dictionary<string, QueueSubscriber>();
-        private readonly BlockingCollection<object> commandQueue = new BlockingCollection<object>();
+        private readonly BlockingCollection<object> commandQueue = new BlockingCollection<object>(50);
         private readonly IDictionary<Type, Action<object>> commandHandlers = new Dictionary<Type, Action<object>>();
         private readonly MessageTypeRegistry registry = new MessageTypeRegistry();
 
@@ -56,6 +56,7 @@ namespace Skutt.RabbitMq
                          };
 
             this.connection = cf.CreateConnection();
+
             this.connection.ConnectionShutdown += (c, ea) => 
             { 
                 Console.WriteLine("Connection interrupted"); 
