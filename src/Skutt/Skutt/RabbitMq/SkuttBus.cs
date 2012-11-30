@@ -69,6 +69,8 @@ namespace Skutt.RabbitMq
                 {
                     if (disposed) return;
 
+                    channelFactory = null;
+
                     Console.WriteLine("Connection interrupted - attempting reconnect.");
 
                     foreach (var queueSubscriber in queueSubscribers)
@@ -170,7 +172,7 @@ namespace Skutt.RabbitMq
 
             if (queueSubscribers.ContainsKey(queue) == false)
             {
-                var qs = new QueueSubscriber(queue, registry, o => commandQueue.Add(o), true);
+                var qs = new QueueSubscriber(queue, registry, o => commandQueue.Add(o));
                 qs.StartConsuming(connection);
 
                 queueSubscribers.Add(queue, qs);
@@ -244,8 +246,7 @@ namespace Skutt.RabbitMq
         {
             var qs = new QueueSubscriber(queue,
                                          registry,
-                                         o => subject.OnNext((dynamic) o),
-                                         true);
+                                         o => subject.OnNext((dynamic) o));
 
             qs.StartConsuming(connection);
 

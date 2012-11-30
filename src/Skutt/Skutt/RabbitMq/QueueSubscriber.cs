@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿using System.IO;
+using Newtonsoft.Json;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Skutt.Contract;
@@ -19,9 +20,8 @@ namespace Skutt.RabbitMq
         private CancellationTokenSource cts;
 
         public QueueSubscriber(string queue,
-            MessageTypeRegistry registry,
-            Action<object> messageHandler,
-            bool startImmediately = false)
+                               MessageTypeRegistry registry,
+                               Action<object> messageHandler)
         {
             Preconditions.Require(queue, "queue");
             Preconditions.Require(registry, "registry");
@@ -35,7 +35,7 @@ namespace Skutt.RabbitMq
         public void StartConsuming(IConnection connection)
         {
             if (task != null && (task.IsCanceled || task.IsCompleted || task.IsFaulted) == false)
-            { 
+            {
                 // assume a task is running and hasnt failed
                 return;
             }
@@ -43,62 +43,77 @@ namespace Skutt.RabbitMq
             this.cts = new CancellationTokenSource();
 
             this.task = Task.Factory.StartNew(() =>
-            {
-                using (var channel = connection.CreateModel())
                 {
-                    channel.ConfirmSelect();
-                    channel.QueueDeclare(queue, true, false, false, null);
-                    consumer = new QueueingBasicConsumer(channel);
-                    channel.BasicConsume(queue, false, consumer);
-
-
-                    while (true)
+                    try
                     {
-                        var deliveryEventArgs = consumer.Queue.Dequeue() as BasicDeliverEventArgs;
-
-                        if (deliveryEventArgs == null) // poison
-                        {
-                            break;
-                        }
-
-                        byte[] body = deliveryEventArgs.Body;
-
-                        var typeLen = BitConverter.ToInt16(body, 0);
-
-                        //var typeDesc = Encoding.UTF8.GetString(body, 2, typeLen);
-
-                        var messageType = registry.GetType(deliveryEventArgs.BasicProperties.Type);
-
-                        if (messageType != null)
-                        {
-                            var serializedMessage = Encoding.UTF8.GetString(body, typeLen + 2, body.Length - typeLen - 2);
-                            var messageObject = JsonConvert.DeserializeObject(serializedMessage, messageType);
-
-                            Console.WriteLine(Thread.CurrentThread.ManagedThreadId);
-
-                            queueAdd(messageObject);
-                            channel.BasicAck(deliveryEventArgs.DeliveryTag, false);
-                        }
-                        else
-                        {
-                            //TODO messageHandler dead letter queue
-                            channel.BasicReject(deliveryEventArgs.DeliveryTag, false);
-                        }
+                        Process(connection);
                     }
+                    catch(IOException e)
+                    {
+                        Console.WriteLine("connection interrupted " + e.Message);
+                    }
+
+                }, cts.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+
+        private void Process(IConnection connection)
+        {
+            using (var channel = connection.CreateModel())
+            {
+                channel.ConfirmSelect();
+                channel.QueueDeclare(queue, true, false, false, null);
+                consumer = new QueueingBasicConsumer(channel);
+                channel.BasicConsume(queue, false, consumer);
+
+                while (true)
+                {
+                    if (Handle(channel)) break;
                 }
-            }, cts.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            }
+        }
+
+        private bool Handle(IModel channel)
+        {
+            var deliveryEventArgs = consumer.Queue.Dequeue() as BasicDeliverEventArgs;
+
+            if (deliveryEventArgs == null) // poison
+            {
+                return true;
+            }
+
+            var body = deliveryEventArgs.Body;
+            var typeLen = BitConverter.ToInt16(body, 0);
+            var messageType = registry.GetType(deliveryEventArgs.BasicProperties.Type);
+
+            if (messageType != null)
+            {
+                var serializedMessage = Encoding.UTF8.GetString(body, typeLen + 2,
+                                                                body.Length - typeLen - 2);
+                var messageObject = JsonConvert.DeserializeObject(serializedMessage, messageType);
+
+                Console.WriteLine(Thread.CurrentThread.ManagedThreadId);
+
+                queueAdd(messageObject);
+                channel.BasicAck(deliveryEventArgs.DeliveryTag, false);
+            }
+            else
+            {
+                //TODO messageHandler dead letter queue
+                channel.BasicReject(deliveryEventArgs.DeliveryTag, false);
+            }
+            return false;
         }
 
         public void Stop()
         {
+            if (cts != null)
+            {
+                cts.Cancel();
+            }
+
             if (consumer != null && consumer.IsRunning)
             {
                 consumer.Queue.Enqueue(null);
-            }
-
-            if(cts != null)
-            {
-                cts.Cancel();
             }
         }
 
