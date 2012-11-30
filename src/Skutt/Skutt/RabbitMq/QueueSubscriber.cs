@@ -48,12 +48,15 @@ namespace Skutt.RabbitMq
                     {
                         Process(connection);
                     }
-                    catch(IOException e)
+                    catch (IOException e)
                     {
                         Console.WriteLine("connection interrupted " + e.Message);
                     }
 
-                }, cts.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                },
+                cts.Token,
+                TaskCreationOptions.LongRunning,
+                TaskScheduler.Default);
         }
 
         private void Process(IConnection connection)
