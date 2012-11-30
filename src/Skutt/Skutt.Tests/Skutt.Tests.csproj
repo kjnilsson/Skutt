@@ -51,6 +51,10 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Skutt.Interfaces\Skutt.Interfaces.csproj">
+      <Project>{b00b54c0-04d0-4f46-a378-2ba5c4601022}</Project>
+      <Name>Skutt.Interfaces</Name>
+    </ProjectReference>
     <ProjectReference Include="..\Skutt\Skutt.csproj">
       <Project>{7e52ee90-b291-421b-905f-f4c1169fe528}</Project>
       <Name>Skutt</Name>

@@ -27,7 +27,6 @@ namespace Skutt.RabbitMq
             Preconditions.Require(rabbitServer, "rabbitServer"); 
 
             this.rabbitServer = rabbitServer;
-            
         }
 
         private IRabbitMqChannelFactory ChannelFactory
@@ -204,7 +203,8 @@ namespace Skutt.RabbitMq
 
         private void AddNewEventSubscriber<TEvent>(IObserver<TEvent> subject, string queue)
         {
-            queueSubscribers.Add(queue, new QueueSubscriber(queue, connection, registry, o => subject.OnNext((dynamic)o), true));
+            queueSubscribers.Add(queue, 
+                new QueueSubscriber(queue, connection, registry, o => subject.OnNext((dynamic)o), true));
         }
     }
 }

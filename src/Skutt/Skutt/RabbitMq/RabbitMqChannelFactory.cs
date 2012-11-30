@@ -106,7 +106,7 @@ namespace Skutt.RabbitMq
             bp.SetPersistent(true);
             bp.CorrelationId = Guid.NewGuid().ToString();
             bp.Type = messageUri;
-
+            
             return bp;
         }
 
