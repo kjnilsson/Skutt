@@ -1,10 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using Skutt;
 using System.Reactive.Linq;
-using System.Reactive.Subjects;
 using Skutt.RabbitMq;
 using System.Threading;
 
@@ -44,8 +40,8 @@ namespace TestHarness
                              bus.Publish(new TestTwo());
                          });
 
-            bus.Publish<TestOne>(new TestOne() { CorrelationId = Guid.NewGuid(), Greeting = "hello" });
-            bus.Publish<TestOne>(new TestOne() { CorrelationId = Guid.NewGuid(), Greeting = "bye" });
+            bus.Publish(new TestOne { CorrelationId = Guid.NewGuid(), Greeting = "hello" });
+            bus.Publish(new TestOne { CorrelationId = Guid.NewGuid(), Greeting = "bye" });
 
             Console.ReadKey();
             bus.Dispose();
@@ -53,8 +49,8 @@ namespace TestHarness
 
         public static void SendCommands(IBus bus)
         {
-            bus.Send<DeadLetter>("skutt_object", new DeadLetter { });
-            bus.Send<TestOne>("skutt_object", new TestOne { CorrelationId = Guid.NewGuid() });
+            bus.Send("skutt_object", new DeadLetter { });
+            bus.Send("skutt_object", new TestOne { CorrelationId = Guid.NewGuid() });
         }
     }
 

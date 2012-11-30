@@ -65,6 +65,9 @@
     <Compile Include="Contract\Preconditions.cs" />
     <Compile Include="MessageSerializer.cs" />
     <Compile Include="MessageTypeRegistry.cs" />
+    <Compile Include="RabbitMq\Channels\IRabbitChannel.cs" />
+    <Compile Include="RabbitMq\Channels\PointToPointSendChannel.cs" />
+    <Compile Include="RabbitMq\Channels\PublishTopicChannel.cs" />
     <Compile Include="RabbitMq\QueueSubscriber.cs" />
     <Compile Include="RabbitMq\RabbitMqChannelFactory.cs" />
     <Compile Include="RabbitMq\SkuttBus.cs" />

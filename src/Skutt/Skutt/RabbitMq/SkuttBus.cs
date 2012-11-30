@@ -30,13 +30,21 @@ namespace Skutt.RabbitMq
             
         }
 
+        ~SkuttBus()
+        {
+            if (connection != null && connection.IsOpen)
+            {
+                connection.Close();
+            }
+        }
+
         private IRabbitMqChannelFactory ChannelFactory
         {
             get
             {
                 if(connection == null || connection.IsOpen == false)
                 {
-                    throw new SkuttException("Cant use the channle factory unless the connection is open");
+                    throw new SkuttException("Cant use the channle factory unless the connection is open. Please call 'Connect'.");
                 }
 
                 if(channelFactory == null)
@@ -57,12 +65,32 @@ namespace Skutt.RabbitMq
 
             this.connection = cf.CreateConnection();
 
-            this.connection.ConnectionShutdown += (c, ea) => 
-            { 
-                Console.WriteLine("Connection interrupted"); 
-            };
+            this.connection.ConnectionShutdown += (c, ea) =>
+                {
+                    Console.WriteLine("Connection interrupted - attempting reconnect."); 
+                    var reconnectionCount = 0;
+                    while (reconnectionCount < 10)
+                    {
+                        Thread.Sleep(1000);
 
-            this.channelFactory = new RabbitMqChannelFactory(connection);
+                        try
+                        {
+                            this.connection = cf.CreateConnection();
+                            foreach (var queueSubscriber in queueSubscribers)
+                            {
+                                //queueSubscriber.
+                            }
+
+                            break;
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine("could not reconnect to broker" + e.Message);
+                        }
+
+                        reconnectionCount++;
+                    }
+            };
 
             StartCommandProcessor();
         }
@@ -151,14 +179,6 @@ namespace Skutt.RabbitMq
             GC.SuppressFinalize(this);
         }
 
-        ~SkuttBus()
-        {
-            if (connection != null && connection.IsOpen)
-            {
-                connection.Close();
-            }
-        }
-
         public void Publish<TEvent>(TEvent @event, string topic = "#")
         {
             Preconditions.Require(@event, "event");
@@ -204,7 +224,12 @@ namespace Skutt.RabbitMq
 
         private void AddNewEventSubscriber<TEvent>(IObserver<TEvent> subject, string queue)
         {
-            queueSubscribers.Add(queue, new QueueSubscriber(queue, connection, registry, o => subject.OnNext((dynamic)o), true));
+            queueSubscribers.Add(queue,
+                                 new QueueSubscriber(queue,
+                                                     connection,
+                                                     registry,
+                                                     o => subject.OnNext((dynamic) o),
+                                                     true));
         }
     }
 }
