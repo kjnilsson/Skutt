@@ -5,11 +5,11 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProductVersion>8.0.30703</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{D1CB2608-63DD-48B2-BC58-C91B3578DDF5}</ProjectGuid>
+    <ProjectGuid>{3DB0DD8E-B4F2-4613-897C-40E9886F1B0D}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>Skutt.Tests</RootNamespace>
-    <AssemblyName>Skutt.Tests</AssemblyName>
+    <RootNamespace>Skutt.Test.Messages</RootNamespace>
+    <AssemblyName>Skutt.Test.Messages</AssemblyName>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>
@@ -38,27 +38,11 @@
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
-    <Reference Include="xunit">
-      <HintPath>..\packages\xunit.1.9.1\lib\net20\xunit.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="MessageTypeRegistryTest.cs" />
-    <Compile Include="SkuttBusTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="packages.config" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\Skutt.Interfaces\Skutt.Interfaces.csproj">
-      <Project>{b00b54c0-04d0-4f46-a378-2ba5c4601022}</Project>
-      <Name>Skutt.Interfaces</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Skutt\Skutt.csproj">
-      <Project>{7e52ee90-b291-421b-905f-f4c1169fe528}</Project>
-      <Name>Skutt</Name>
-    </ProjectReference>
+    <Compile Include="TestOne.cs" />
+    <Compile Include="TestTwo.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

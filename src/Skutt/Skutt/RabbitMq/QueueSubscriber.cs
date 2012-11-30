@@ -12,7 +12,6 @@ namespace Skutt.RabbitMq
     internal class QueueSubscriber : IDisposable
     {
         private readonly string queue;
-        private readonly IConnection connection;
         private readonly MessageTypeRegistry registry;
         private readonly Action<object> queueAdd;
         private QueueingBasicConsumer consumer;
@@ -20,28 +19,20 @@ namespace Skutt.RabbitMq
         private CancellationTokenSource cts;
 
         public QueueSubscriber(string queue,
-            IConnection connection,
             MessageTypeRegistry registry,
             Action<object> messageHandler,
             bool startImmediately = false)
         {
             Preconditions.Require(queue, "queue");
-            Preconditions.Require(connection, "connection");
             Preconditions.Require(registry, "registry");
             Preconditions.Require(messageHandler, "messageHandler");
 
             this.queue = queue;
-            this.connection = connection;
             this.registry = registry;
             this.queueAdd = messageHandler;
-
-            if (startImmediately)
-            {
-                StartConsuming();
-            }
         }
 
-        public void StartConsuming()
+        public void StartConsuming(IConnection connection)
         {
             if (task != null && (task.IsCanceled || task.IsCompleted || task.IsFaulted) == false)
             { 

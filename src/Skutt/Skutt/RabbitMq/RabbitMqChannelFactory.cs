@@ -28,4 +28,5 @@ namespace Skutt.RabbitMq
             return new PublishTopicChannel(connection, topic);
         }
     }
+            
 }

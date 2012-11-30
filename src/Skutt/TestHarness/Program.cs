@@ -3,6 +3,7 @@ using Skutt;
 using System.Reactive.Linq;
 using Skutt.RabbitMq;
 using System.Threading;
+using Skutt.Test.Messages;
 
 namespace TestHarness
 {
@@ -52,16 +53,6 @@ namespace TestHarness
             bus.Send("skutt_object", new DeadLetter { });
             bus.Send("skutt_object", new TestOne { CorrelationId = Guid.NewGuid() });
         }
-    }
-
-    public class TestTwo
-    { }
-
-    public class TestOne
-    {
-        public Guid CorrelationId { get; set; }
-        public DateTime SentOn { get; set; }
-        public string Greeting { get; set; }
     }
 
     public class DeadLetter

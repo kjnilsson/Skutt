@@ -68,6 +68,10 @@
       <Project>{B00B54C0-04D0-4F46-A378-2BA5C4601022}</Project>
       <Name>Skutt.Interfaces</Name>
     </ProjectReference>
+    <ProjectReference Include="..\Skutt.Test.Messages\Skutt.Test.Messages.csproj">
+      <Project>{3DB0DD8E-B4F2-4613-897C-40E9886F1B0D}</Project>
+      <Name>Skutt.Test.Messages</Name>
+    </ProjectReference>
     <ProjectReference Include="..\Skutt\Skutt.csproj">
       <Project>{7E52EE90-B291-421B-905F-F4C1169FE528}</Project>
       <Name>Skutt</Name>

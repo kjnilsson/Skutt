@@ -21,7 +21,6 @@ namespace Skutt.RabbitMq
 
         private readonly Uri rabbitServer;
         private IConnection connection;
-        private bool disposed;
 
         public SkuttBus(Uri rabbitServer)
         {
@@ -67,15 +66,7 @@ namespace Skutt.RabbitMq
 
             this.connection.ConnectionShutdown += (c, ea) =>
                 {
-                    if (disposed) return;
-
-                    Console.WriteLine("Connection interrupted - attempting reconnect.");
-
-                    foreach (var queueSubscriber in queueSubscribers)
-                    {
-                        queueSubscriber.Value.Stop();
-                    }
-
+                    Console.WriteLine("Connection interrupted - attempting reconnect."); 
                     var reconnectionCount = 0;
                     while (reconnectionCount < 10)
                     {
@@ -83,22 +74,17 @@ namespace Skutt.RabbitMq
 
                         try
                         {
-                            Console.WriteLine("Reconnection attempt: " + reconnectionCount); 
                             this.connection = cf.CreateConnection();
-
-                            Console.WriteLine("Connected to broker - restarting subscribers");
-
                             foreach (var queueSubscriber in queueSubscribers)
                             {
-                                queueSubscriber.Value.Stop();
-                                queueSubscriber.Value.StartConsuming(connection);
+                                //queueSubscriber.
                             }
 
                             break;
                         }
                         catch (Exception e)
                         {
-                            Console.WriteLine("could not reconnect to broker " + e.Message);
+                            Console.WriteLine("could not reconnect to broker" + e.Message);
                         }
 
                         reconnectionCount++;
@@ -170,10 +156,7 @@ namespace Skutt.RabbitMq
 
             if (queueSubscribers.ContainsKey(queue) == false)
             {
-                var qs = new QueueSubscriber(queue, registry, o => commandQueue.Add(o), true);
-                qs.StartConsuming(connection);
-
-                queueSubscribers.Add(queue, qs);
+                queueSubscribers.Add(queue, new QueueSubscriber(queue, connection, registry, o => commandQueue.Add(o), true));
             }
 
             commandHandlers.Add(typeof(TCommand), o => handler((dynamic)o));
@@ -181,8 +164,6 @@ namespace Skutt.RabbitMq
 
         public void Dispose()
         {
-            this.disposed = true;
-
             foreach (var commandSubscriber in queueSubscribers.Values)
             {
                 commandSubscriber.Stop();
@@ -242,14 +223,17 @@ namespace Skutt.RabbitMq
 
         private void AddNewEventSubscriber<TEvent>(IObserver<TEvent> subject, string queue)
         {
-            var qs = new QueueSubscriber(queue,
-                                         registry,
-                                         o => subject.OnNext((dynamic) o),
-                                         true);
-
-            qs.StartConsuming(connection);
-
-            queueSubscribers.Add(queue,qs);
+<<<<<<< HEAD
+            queueSubscribers.Add(queue,
+                                 new QueueSubscriber(queue,
+                                                     connection,
+                                                     registry,
+                                                     o => subject.OnNext((dynamic) o),
+                                                     true));
+=======
+            queueSubscribers.Add(queue, 
+                new QueueSubscriber(queue, connection, registry, o => subject.OnNext((dynamic)o), true));
+>>>>>>> 89bb4440731b4898855d0021d86b10a9c55548da
         }
     }
 }
