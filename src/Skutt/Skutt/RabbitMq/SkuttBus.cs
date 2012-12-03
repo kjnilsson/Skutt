@@ -7,6 +7,7 @@ using Skutt.Contract;
 using System.Reactive.Subjects;
 using System.Threading;
 using RabbitMQ.Client.Exceptions;
+using Skutt.RabbitMq.Extensions;
 
 namespace Skutt.RabbitMq
 {
@@ -224,7 +225,8 @@ namespace Skutt.RabbitMq
 
             var messageTypeUri = registry.GetUri<TEvent>();
 
-            var exchangeName = GetExchangeName(messageTypeUri);
+            var exchangeName = messageTypeUri.ToExchangeName();
+
             var routingKey = exchangeName + "." + subscriptionId;
 
             using (var channel = connection.CreateModel())
@@ -248,23 +250,6 @@ namespace Skutt.RabbitMq
             var subject = new Subject<TEvent>();
             Subscribe<TEvent>(subscriptionId, subject.OnNext, topic);
             return subject;
-        }
-
-        private static string GetExchangeName(Uri mt)
-        {
-            var exchangeName = string.Concat(mt.Authority, mt.LocalPath.Replace('/', '.'));
-            return exchangeName.ToLower();
-        }
-
-        private void AddNewEventSubscriber<TEvent>(IObserver<TEvent> subject, string queue)
-        {
-            var qs = new QueueSubscriber(queue,
-                                         registry,
-                                         o => subject.OnNext((dynamic) o));
-
-            qs.StartConsuming(connection);
-
-            queueSubscribers.Add(queue,qs);
         }
     }
 }

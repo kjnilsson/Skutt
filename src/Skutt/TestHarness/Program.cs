@@ -22,7 +22,7 @@ namespace TestHarness
             SendCommands(bus);
             
             Console.WriteLine("App thread: " + Thread.CurrentThread.ManagedThreadId.ToString());
-            Thread.Sleep(1000);
+            //Thread.Sleep(1000);
 
             //bus.Subscribe<TestOne>("sub_test", m => Console.WriteLine("Event: TestOne" + m.Greeting));
 

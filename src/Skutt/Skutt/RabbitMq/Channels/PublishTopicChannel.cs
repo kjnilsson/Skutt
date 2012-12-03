@@ -1,6 +1,7 @@
 ﻿using System;
 using RabbitMQ.Client;
 using Skutt.Contract;
+using Skutt.RabbitMq.Extensions;
 
 namespace Skutt.RabbitMq.Channels
 {
@@ -20,7 +21,8 @@ namespace Skutt.RabbitMq.Channels
             Preconditions.Require(message, "message");
             Preconditions.Require(typeHeader, "typeHeader");
 
-            var exchangeName = GetExchangeName(new Uri(typeHeader));
+            var exchangeName = new Uri(typeHeader).ToExchangeName();
+
             channel.ExchangeDeclare(exchangeName, "topic", true);
             var basicProperties = GetBasicProperties(typeHeader, channel);
 
