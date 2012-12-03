@@ -30,16 +30,14 @@ namespace Skutt.RabbitMq
             this.queue = queue;
             this.registry = registry;
             this.queueAdd = messageHandler;
-
-           // this.task = Task.Factory.StartNew(() => { });
         }
 
         public void StartConsuming(IConnection connection)
         {
-            if (task != null && (task.IsCanceled || task.IsCompleted || task.IsFaulted) == false)
+            if (task != null)
             {
-                // assume a task is running and hasnt failed
-                Console.WriteLine("addign continuation sub");
+                Console.WriteLine("adding continuation sub");
+         
                 this.cts = new CancellationTokenSource();
                 this.task.ContinueWith(t =>
                                         {
@@ -50,7 +48,6 @@ namespace Skutt.RabbitMq
                                             catch (IOException e)
                                             {
                                                 Console.WriteLine("connection interrupted " + e.Message);
-                                                //throw;
                                             }
                                         },
                                        cts.Token,
@@ -70,7 +67,6 @@ namespace Skutt.RabbitMq
                     catch (IOException e)
                     {
                         Console.WriteLine("connection interrupted " + e.Message);
-                       // throw;
                     }
 
                 },
@@ -121,7 +117,6 @@ namespace Skutt.RabbitMq
 
         public void Stop()
         {
-            //consumer.Queue.
             if (cts != null)
             {
                 cts.Cancel();
