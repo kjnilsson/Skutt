@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2010
+# Visual Studio 2012
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Skutt", "Skutt\Skutt.csproj", "{7E52EE90-B291-421B-905F-F4C1169FE528}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Skutt.Interfaces", "Skutt.Interfaces\Skutt.Interfaces.csproj", "{B00B54C0-04D0-4F46-A378-2BA5C4601022}"
@@ -19,6 +19,8 @@ EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "ScratchPad", "ScratchPad\ScratchPad.fsproj", "{079AF6C4-D207-44A1-BE64-AB8E34CC0958}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Skutt.Test.Messages", "Skutt.Test.Messages\Skutt.Test.Messages.csproj", "{3DB0DD8E-B4F2-4613-897C-40E9886F1B0D}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Skutt.Test.Broadcaster", "Skutt.Test.Broadcaster\Skutt.Test.Broadcaster.fsproj", "{923FA324-3817-403E-9C1B-9CC146F27AB9}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -90,6 +92,16 @@ Global
 		{3DB0DD8E-B4F2-4613-897C-40E9886F1B0D}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
 		{3DB0DD8E-B4F2-4613-897C-40E9886F1B0D}.Release|Mixed Platforms.Build.0 = Release|Any CPU
 		{3DB0DD8E-B4F2-4613-897C-40E9886F1B0D}.Release|x86.ActiveCfg = Release|Any CPU
+		{923FA324-3817-403E-9C1B-9CC146F27AB9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{923FA324-3817-403E-9C1B-9CC146F27AB9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{923FA324-3817-403E-9C1B-9CC146F27AB9}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
+		{923FA324-3817-403E-9C1B-9CC146F27AB9}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
+		{923FA324-3817-403E-9C1B-9CC146F27AB9}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{923FA324-3817-403E-9C1B-9CC146F27AB9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{923FA324-3817-403E-9C1B-9CC146F27AB9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{923FA324-3817-403E-9C1B-9CC146F27AB9}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{923FA324-3817-403E-9C1B-9CC146F27AB9}.Release|Mixed Platforms.Build.0 = Release|Any CPU
+		{923FA324-3817-403E-9C1B-9CC146F27AB9}.Release|x86.ActiveCfg = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
