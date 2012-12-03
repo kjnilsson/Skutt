@@ -30,17 +30,29 @@ namespace Skutt.RabbitMq
             this.queue = queue;
             this.registry = registry;
             this.queueAdd = messageHandler;
-
-           // this.task = Task.Factory.StartNew(() => { });
         }
 
         public void StartConsuming(IConnection connection)
         {
-            //Console.WriteLine("start consuming");
-            if (task != null && (task.IsCanceled || task.IsCompleted || task.IsFaulted) == false)
+            if (task != null)
             {
-                // assume a task is running and hasnt failed
-                Console.WriteLine("start consuming exit early");
+                Console.WriteLine("adding continuation sub");
+         
+                this.cts = new CancellationTokenSource();
+                this.task.ContinueWith(t =>
+                                        {
+                                            try
+                                            {
+                                                ProcessQueue(connection);
+                                            }
+                                            catch (IOException e)
+                                            {
+                                                Console.WriteLine("connection interrupted " + e.Message);
+                                            }
+                                        },
+                                       cts.Token,
+                                       TaskContinuationOptions.LongRunning,
+                                       TaskScheduler.Default);
                 return;
             }
 
@@ -50,7 +62,7 @@ namespace Skutt.RabbitMq
                 {
                     try
                     {
-                        Process(connection);
+                        ProcessQueue(connection);
                     }
                     catch (IOException e)
                     {
@@ -63,21 +75,21 @@ namespace Skutt.RabbitMq
                 TaskScheduler.Default);
         }
 
-        private void Process(IConnection connection)
+        private void ProcessQueue(IConnection connection)
         {
             using (var channel = connection.CreateModel())
             {
                 channel.QueueDeclare(queue, true, false, false, null);
                 consumer = new QueueingBasicConsumer(channel);
-                
                 channel.BasicConsume(queue, false, consumer);
 
                 while (true)
                 {
                     var deliveryEventArgs = consumer.Queue.Dequeue() as BasicDeliverEventArgs;
-                    Console.WriteLine("new message from queue " + deliveryEventArgs.RoutingKey);
+                    
                     if (deliveryEventArgs == null) // poison
                     {
+                        Console.WriteLine("Poison message received.");
                         break;
                     }
 
@@ -103,47 +115,12 @@ namespace Skutt.RabbitMq
             }
         }
 
-        private bool Handle(IModel channel)
-        {
-            var deliveryEventArgs = consumer.Queue.Dequeue() as BasicDeliverEventArgs;
-            Console.WriteLine("new message from queue " + deliveryEventArgs.RoutingKey);
-            if (deliveryEventArgs == null) // poison
-            {
-                return true;
-            }
-
-            var body = deliveryEventArgs.Body;
-            var typeLen = BitConverter.ToInt16(body, 0);
-            var messageType = registry.GetType(deliveryEventArgs.BasicProperties.Type);
-
-            if (messageType != null)
-            {
-                var serializedMessage = Encoding.UTF8.GetString(body, typeLen + 2,
-                                                                body.Length - typeLen - 2);
-                var messageObject = JsonConvert.DeserializeObject(serializedMessage, messageType);
-
-                queueAdd(messageObject);
-                channel.BasicAck(deliveryEventArgs.DeliveryTag, false);
-            }
-            else
-            {
-                //TODO messageHandler dead letter queue
-                channel.BasicReject(deliveryEventArgs.DeliveryTag, false);
-            }
-            return false;
-        }
-
         public void Stop()
         {
             if (cts != null)
             {
                 cts.Cancel();
             }
-
-            //if (consumer != null && consumer.IsRunning)
-            //{
-            //    consumer.Queue.Enqueue(null);
-            //}
         }
 
         public void Dispose()
