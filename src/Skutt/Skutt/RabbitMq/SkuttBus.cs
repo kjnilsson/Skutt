@@ -66,6 +66,18 @@ namespace Skutt.RabbitMq
 
             this.connection = cf.CreateConnection();
 
+            while (connection.IsOpen == false)
+            {
+                Thread.Sleep(500);
+                Console.WriteLine("ugh");
+            }
+
+            foreach (var queueSubscriber in queueSubscribers)
+            {
+                //                   queueSubscriber.Value.Stop();
+                queueSubscriber.Value.StartConsuming(this.connection);
+            }
+
             this.connection.ConnectionShutdown += (c, ea) =>
                 {
                     if (disposed) return;
@@ -86,21 +98,12 @@ namespace Skutt.RabbitMq
 
                         try
                         {
-                            Console.WriteLine("Reconnection attempt: " + reconnectionCount); 
-                            this.connection = cf.CreateConnection();
+                            //Console.WriteLine("Reconnection attempt: " + reconnectionCount); 
+                            //this.connection = cf.CreateConnection();
 
-                            Console.WriteLine("Connected to broker - restarting subscribers");
-                            while(connection.IsOpen == false)
-                            {
-                                Thread.Sleep(500);
-                                Console.WriteLine("ugh");
-                            }
-                            
-                            foreach (var queueSubscriber in queueSubscribers)
-                            {
-             //                   queueSubscriber.Value.Stop();
-                                queueSubscriber.Value.StartConsuming(this.connection);
-                            }
+                            //Console.WriteLine("Connected to broker - restarting subscribers");
+
+                            this.Connect();
 
                             break;
                         }

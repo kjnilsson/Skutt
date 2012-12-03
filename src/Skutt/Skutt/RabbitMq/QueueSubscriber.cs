@@ -39,7 +39,23 @@ namespace Skutt.RabbitMq
             if (task != null && (task.IsCanceled || task.IsCompleted || task.IsFaulted) == false)
             {
                 // assume a task is running and hasnt failed
-                Console.WriteLine("start consuming exit early");
+                Console.WriteLine("addign continuation sub");
+                this.cts = new CancellationTokenSource();
+                this.task.ContinueWith(t =>
+                                        {
+                                            try
+                                            {
+                                                ProcessQueue(connection);
+                                            }
+                                            catch (IOException e)
+                                            {
+                                                Console.WriteLine("connection interrupted " + e.Message);
+                                                //throw;
+                                            }
+                                        },
+                                       cts.Token,
+                                       TaskContinuationOptions.LongRunning,
+                                       TaskScheduler.Default);
                 return;
             }
 
@@ -54,6 +70,7 @@ namespace Skutt.RabbitMq
                     catch (IOException e)
                     {
                         Console.WriteLine("connection interrupted " + e.Message);
+                       // throw;
                     }
 
                 },
@@ -80,8 +97,6 @@ namespace Skutt.RabbitMq
                         break;
                     }
 
-                    Console.WriteLine("new message from queue " + deliveryEventArgs.RoutingKey);
-
                     var body = deliveryEventArgs.Body;
                     var typeLen = BitConverter.ToInt16(body, 0);
                     var messageType = registry.GetType(deliveryEventArgs.BasicProperties.Type);
@@ -106,6 +121,7 @@ namespace Skutt.RabbitMq
 
         public void Stop()
         {
+            //consumer.Queue.
             if (cts != null)
             {
                 cts.Cancel();
