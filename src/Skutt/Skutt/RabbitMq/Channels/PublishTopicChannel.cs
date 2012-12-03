@@ -1,7 +1,7 @@
 ﻿using System;
 using RabbitMQ.Client;
 using Skutt.Contract;
-using Skutt.RabbitMq.Extensions;
+using Skutt.Extensions;
 
 namespace Skutt.RabbitMq.Channels
 {
@@ -12,6 +12,9 @@ namespace Skutt.RabbitMq.Channels
 
         public PublishTopicChannel(IConnection connection, string topic)
         {
+            Preconditions.Require(connection, "connection");
+            Preconditions.Require(topic, "topic");
+
             this.channel = connection.CreateModel();
             this.topic = topic;
         }
@@ -38,12 +41,6 @@ namespace Skutt.RabbitMq.Channels
             bp.Type = messageUri;
 
             return bp;
-        }
-
-        private static string GetExchangeName(Uri mt)
-        {
-            var exchangeName = string.Concat(mt.Authority, mt.LocalPath.Replace('/', '.'));
-            return exchangeName.ToLower();
         }
 
         public void Dispose()

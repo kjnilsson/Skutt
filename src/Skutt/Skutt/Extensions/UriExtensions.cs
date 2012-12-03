@@ -1,7 +1,7 @@
 ﻿using System;
 using Skutt.Contract;
 
-namespace Skutt.RabbitMq.Extensions
+namespace Skutt.Extensions
 {
     public static class UriExtensions
     {

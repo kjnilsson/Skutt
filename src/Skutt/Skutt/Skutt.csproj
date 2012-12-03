@@ -63,12 +63,13 @@
     <Compile Include="Contract\Postconditions.cs" />
     <Compile Include="Contract\PreconditionFailedException.cs" />
     <Compile Include="Contract\Preconditions.cs" />
+    <Compile Include="Extensions\IBusExtensions.cs" />
     <Compile Include="MessageSerializer.cs" />
     <Compile Include="MessageTypeRegistry.cs" />
     <Compile Include="RabbitMq\Channels\IRabbitChannel.cs" />
     <Compile Include="RabbitMq\Channels\PointToPointSendChannel.cs" />
     <Compile Include="RabbitMq\Channels\PublishTopicChannel.cs" />
-    <Compile Include="RabbitMq\Extensions\UriExtensions.cs" />
+    <Compile Include="Extensions\UriExtensions.cs" />
     <Compile Include="RabbitMq\QueueSubscriber.cs" />
     <Compile Include="RabbitMq\RabbitMqChannelFactory.cs" />
     <Compile Include="RabbitMq\SkuttBus.cs" />

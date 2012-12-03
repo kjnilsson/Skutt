@@ -1,6 +1,6 @@
 ﻿using System;
 using Xunit;
-using Skutt.RabbitMq.Extensions;
+using Skutt.Extensions;
 
 namespace Skutt.Tests
 {

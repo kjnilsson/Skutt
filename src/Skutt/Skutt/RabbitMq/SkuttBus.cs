@@ -7,7 +7,7 @@ using Skutt.Contract;
 using System.Reactive.Subjects;
 using System.Threading;
 using RabbitMQ.Client.Exceptions;
-using Skutt.RabbitMq.Extensions;
+using Skutt.Extensions;
 
 namespace Skutt.RabbitMq
 {
@@ -68,13 +68,12 @@ namespace Skutt.RabbitMq
 
             while (connection.IsOpen == false)
             {
-                Thread.Sleep(500);
+                Thread.Sleep(100);
                 Console.WriteLine("ugh");
             }
 
             foreach (var queueSubscriber in queueSubscribers)
             {
-                //                   queueSubscriber.Value.Stop();
                 queueSubscriber.Value.StartConsuming(this.connection);
             }
 
@@ -92,25 +91,19 @@ namespace Skutt.RabbitMq
                     }
 
                     var reconnectionCount = 0;
-                    while (reconnectionCount < 10)
+                    while (reconnectionCount < 100)
                     {
-                        Thread.Sleep(1000);
-
                         try
                         {
-                            //Console.WriteLine("Reconnection attempt: " + reconnectionCount); 
-                            //this.connection = cf.CreateConnection();
-
-                            //Console.WriteLine("Connected to broker - restarting subscribers");
-
                             this.Connect();
-
                             break;
                         }
                         catch (Exception e)
                         {
                             Console.WriteLine("could not reconnect to broker " + e.Message);
                         }
+
+                        Thread.Sleep(1000);
 
                         reconnectionCount++;
                     }
@@ -134,9 +127,13 @@ namespace Skutt.RabbitMq
                                                       handler(message);
                                                   }
                                                   catch (Exception e)
-                                                  { 
-                                                    //TODO send to error queue if configured
+                                                  {
+                                                      //TODO send to error queue if configured
                                                   }
+                                              }
+                                              else
+                                              {
+                                                  //send to error queue
                                               }
                                           }
                                       }, TaskCreationOptions.LongRunning);
