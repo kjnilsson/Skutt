@@ -24,13 +24,14 @@ namespace TestHarness
             Console.WriteLine("App thread: " + Thread.CurrentThread.ManagedThreadId.ToString());
             Thread.Sleep(1000);
 
-            bus.Subscribe<TestOne>("sub_test", m => Console.WriteLine("Event: TestOne" + m.Greeting));
+            //bus.Subscribe<TestOne>("sub_test", m => Console.WriteLine("Event: TestOne" + m.Greeting));
 
             
-            //var obs = bus.Observe<TestOne>("my_test");
-            //var obs2 = bus.Observe<TestTwo>("my_test").Subscribe(e => Console.WriteLine("Event: TestTwo" + Thread.CurrentThread.ManagedThreadId.ToString()));
+            var obs = bus.Observe<TestOne>("my_test");
+            var obs2 = bus.Observe<TestTwo>("my_test").Subscribe(e => Console.WriteLine("Event: TestTwo" + Thread.CurrentThread.ManagedThreadId.ToString()));
 
-            //var __ = obs.Subscribe(m => Console.WriteLine("Event: TestTwo" + m.Greeting + Thread.CurrentThread.ManagedThreadId.ToString()));
+            var __ = obs.Subscribe(m => Console.WriteLine("Event: TestTwo" + m.Greeting + Thread.CurrentThread.ManagedThreadId.ToString()));
+
 
             //var _ = obs.Where(m => m.Greeting.Equals("hello"))
             //         .Subscribe(m =>

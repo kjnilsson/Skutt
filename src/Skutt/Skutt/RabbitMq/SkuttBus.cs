@@ -245,25 +245,8 @@ namespace Skutt.RabbitMq
 
         public IObservable<TEvent> Observe<TEvent>(string subscriptionId, string topic = "#")
         {
-            Preconditions.Require(subscriptionId, "subscriptionId");
-            Preconditions.Require(topic, "topic");
-
-            var messageTypeUri = registry.GetUri<TEvent>();
-
-            var exchangeName = GetExchangeName(messageTypeUri);
-            var routingKey = exchangeName + "." + subscriptionId;
-
-            using (var channel = connection.CreateModel())
-            {
-                channel.ExchangeDeclare(exchangeName, "topic");
-                channel.QueueDeclare(routingKey, true, false, false, null);
-                channel.QueueBind(routingKey, exchangeName, topic);
-            }
-
             var subject = new Subject<TEvent>();
-            
-            AddNewEventSubscriber(subject, routingKey);
-            
+            Subscribe<TEvent>(subscriptionId, subject.OnNext, topic);
             return subject;
         }
 
