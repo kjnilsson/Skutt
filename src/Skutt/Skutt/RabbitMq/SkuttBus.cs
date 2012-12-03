@@ -89,11 +89,16 @@ namespace Skutt.RabbitMq
                             this.connection = cf.CreateConnection();
 
                             Console.WriteLine("Connected to broker - restarting subscribers");
-
+                            while(connection.IsOpen == false)
+                            {
+                                Thread.Sleep(500);
+                                Console.WriteLine("ugh");
+                            }
+                            
                             foreach (var queueSubscriber in queueSubscribers)
                             {
-                                queueSubscriber.Value.Stop();
-                                queueSubscriber.Value.StartConsuming(connection);
+             //                   queueSubscriber.Value.Stop();
+                                queueSubscriber.Value.StartConsuming(this.connection);
                             }
 
                             break;
@@ -210,6 +215,32 @@ namespace Skutt.RabbitMq
             {
                 channel.Put(MessageSerializer.SerializeDefault(@event, messageTypeUri), messageTypeUri.ToString());
             }
+        }
+
+        public void Subscribe<TEvent>(string subscriptionId, Action<TEvent> handler, string topic = "#")
+        { 
+            Preconditions.Require(subscriptionId, "subscriptionId");
+            Preconditions.Require(topic, "topic");
+
+            var messageTypeUri = registry.GetUri<TEvent>();
+
+            var exchangeName = GetExchangeName(messageTypeUri);
+            var routingKey = exchangeName + "." + subscriptionId;
+
+            using (var channel = connection.CreateModel())
+            {
+                channel.ExchangeDeclare(exchangeName, "topic", true);
+                channel.QueueDeclare(routingKey, true, false, false, null);
+                channel.QueueBind(routingKey, exchangeName, topic);
+            }
+
+            var qs = new QueueSubscriber(routingKey,
+                                         registry,
+                                         o => handler((dynamic)o));
+
+            qs.StartConsuming(connection);
+
+            queueSubscribers.Add(routingKey, qs);
         }
 
         public IObservable<TEvent> Observe<TEvent>(string subscriptionId, string topic = "#")

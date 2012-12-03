@@ -21,7 +21,7 @@ namespace Skutt.RabbitMq.Channels
             Preconditions.Require(typeHeader, "typeHeader");
 
             var exchangeName = GetExchangeName(new Uri(typeHeader));
-            channel.ExchangeDeclare(exchangeName, "topic");
+            channel.ExchangeDeclare(exchangeName, "topic", true);
             var basicProperties = GetBasicProperties(typeHeader, channel);
 
             channel.BasicPublish(exchangeName, topic, false, basicProperties, message);
